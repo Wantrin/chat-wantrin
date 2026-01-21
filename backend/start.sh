@@ -40,6 +40,59 @@ if [[ "${USE_OLLAMA_DOCKER,,}" == "true" ]]; then
     ollama serve &
 fi
 
+# Pré-télécharger Gemma 3 si Ollama est disponible (en arrière-plan pour ne pas bloquer le démarrage)
+if [ -n "${OLLAMA_BASE_URL}" ]; then
+    (
+        OLLAMA_URL="${OLLAMA_BASE_URL}"
+        # S'assurer que l'URL se termine par /api ou ajouter le port si nécessaire
+        if [[ ! "$OLLAMA_URL" =~ :[0-9]+ ]]; then
+            OLLAMA_URL="${OLLAMA_URL}:11434"
+        fi
+        if [[ "$OLLAMA_URL" =~ /api$ ]]; then
+            OLLAMA_API_URL="${OLLAMA_URL}"
+        else
+            OLLAMA_API_URL="${OLLAMA_URL}/api"
+        fi
+        
+        echo "Attente d'Ollama pour télécharger Gemma 3..."
+        MAX_RETRIES=60
+        RETRY_COUNT=0
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if curl -s -f "${OLLAMA_API_URL}/tags" > /dev/null 2>&1; then
+                echo "Ollama est prêt, vérification de Gemma 3..."
+                # Vérifier si gemma3 ou gemma2 est déjà installé
+                MODELS_JSON=$(curl -s "${OLLAMA_API_URL}/tags" 2>/dev/null || echo "{}")
+                MODELS=$(echo "$MODELS_JSON" | grep -o '"name":"[^"]*"' | sed 's/"name":"//g' | sed 's/"//g' || echo "")
+                
+                if echo "$MODELS" | grep -qiE "gemma3|gemma2"; then
+                    echo "Gemma est déjà installé: $(echo "$MODELS" | grep -iE "gemma3|gemma2" | head -1)"
+                else
+                    echo "Téléchargement de Gemma 3..."
+                    curl -X POST "${OLLAMA_API_URL}/pull" \
+                        -H "Content-Type: application/json" \
+                        -d '{"name": "gemma3"}' 2>&1 | grep -v "^$" || {
+                        echo "Tentative avec Gemma 2..."
+                        curl -X POST "${OLLAMA_API_URL}/pull" \
+                            -H "Content-Type: application/json" \
+                            -d '{"name": "gemma2"}' 2>&1 | grep -v "^$" || echo "Impossible de télécharger Gemma automatiquement"
+                    }
+                fi
+                break
+            fi
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $((RETRY_COUNT % 5)) -eq 0 ]; then
+                echo "Attente d'Ollama... ($RETRY_COUNT/$MAX_RETRIES)"
+            fi
+            sleep 2
+        done
+        
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+            echo "Avertissement: Ollama n'est pas disponible après $MAX_RETRIES tentatives. Les modèles devront être téléchargés manuellement."
+        fi
+    ) &
+fi
+
 if [[ "${USE_CUDA_DOCKER,,}" == "true" ]]; then
   echo "CUDA is enabled, appending LD_LIBRARY_PATH to include torch/cudnn & cublas libraries."
   export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/lib/python3.11/site-packages/torch/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib"

@@ -1155,7 +1155,7 @@ DEFAULT_LOCALE = PersistentConfig(
 )
 
 DEFAULT_MODELS = PersistentConfig(
-    "DEFAULT_MODELS", "ui.default_models", os.environ.get("DEFAULT_MODELS", None)
+    "DEFAULT_MODELS", "ui.default_models", os.environ.get("DEFAULT_MODELS", "gemma3")
 )
 
 DEFAULT_PINNED_MODELS = PersistentConfig(
