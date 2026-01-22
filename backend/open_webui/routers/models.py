@@ -4,6 +4,7 @@ import base64
 import json
 import asyncio
 import logging
+import os
 
 from open_webui.models.groups import Groups
 from open_webui.models.models import (
@@ -376,9 +377,19 @@ def get_model_profile_image(
                 except Exception as e:
                     pass
 
-        return FileResponse(f"{STATIC_DIR}/favicon.png")
+        favicon_path = f"{STATIC_DIR}/favicon.png"
+        if os.path.exists(favicon_path):
+            return FileResponse(favicon_path)
+        else:
+            # Return empty response if favicon doesn't exist
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
     else:
-        return FileResponse(f"{STATIC_DIR}/favicon.png")
+        favicon_path = f"{STATIC_DIR}/favicon.png"
+        if os.path.exists(favicon_path):
+            return FileResponse(favicon_path)
+        else:
+            # Return empty response if favicon doesn't exist
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 ############################

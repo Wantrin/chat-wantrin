@@ -35,7 +35,15 @@
 
 <div
 	class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer overflow-hidden"
+	role="button"
+	tabindex="0"
 	on:click={() => goto(`/shops/${item.shop_id}/products/${item.id}`)}
+	on:keydown={(e) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			goto(`/shops/${item.shop_id}/products/${item.id}`);
+		}
+	}}
 >
 	{#if coverUrl}
 		<img

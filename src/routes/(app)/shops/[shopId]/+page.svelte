@@ -21,7 +21,8 @@
 
 	onMount(async () => {
 		try {
-			const res = await getShopById(localStorage.token, $page.params.id);
+			const shopId = $page.params.shopId;
+			const res = await getShopById(localStorage.token, shopId);
 			if (res) {
 				shop = res;
 			} else {

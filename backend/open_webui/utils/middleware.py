@@ -1,37 +1,57 @@
-import time
-import logging
-import sys
-import os
-import base64
-import textwrap
-
-import asyncio
-from aiocache import cached
-from typing import Any, Optional
-import random
-import json
-import html
-import inspect
-import re
 import ast
-
+import asyncio
+import html
+import json
+import logging
+import re
+import sys
+import textwrap
+import time
+from typing import Optional
 from uuid import uuid4
-from concurrent.futures import ThreadPoolExecutor
-
 
 from fastapi import Request, HTTPException
 from fastapi.responses import HTMLResponse
-from starlette.responses import Response, StreamingResponse, JSONResponse
-
-
-from open_webui.utils.misc import is_string_allowed
-from open_webui.models.oauth_sessions import OAuthSessions
+from open_webui.config import (
+    CACHE_DIR,
+    DEFAULT_VOICE_MODE_PROMPT_TEMPLATE,
+    DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
+    DEFAULT_CODE_INTERPRETER_PROMPT,
+    CODE_INTERPRETER_BLOCKED_MODULES,
+)
+from open_webui.constants import TASKS
+from open_webui.env import (
+    GLOBAL_LOG_LEVEL,
+    ENABLE_CHAT_RESPONSE_BASE64_IMAGE_URL_CONVERSION,
+    CHAT_RESPONSE_STREAM_DELTA_CHUNK_SIZE,
+    CHAT_RESPONSE_MAX_TOOL_CALL_RETRIES,
+    BYPASS_MODEL_ACCESS_CONTROL,
+    ENABLE_REALTIME_CHAT_SAVE,
+    ENABLE_QUERIES_CACHE,
+    RAG_SYSTEM_CONTEXT,
+)
 from open_webui.models.chats import Chats
 from open_webui.models.folders import Folders
+from open_webui.models.functions import Functions
+from open_webui.models.models import Models
+from open_webui.models.oauth_sessions import OAuthSessions
+from open_webui.models.users import UserModel
 from open_webui.models.users import Users
-from open_webui.socket.main import (
-    get_event_call,
-    get_event_emitter,
+from open_webui.retrieval.utils import get_sources_from_items
+from open_webui.routers.images import (
+    image_generations,
+    CreateImageForm,
+    image_edits,
+    EditImageForm,
+)
+from open_webui.routers.memories import query_memory, QueryMemoryForm
+from open_webui.routers.pipelines import (
+    process_pipeline_inlet_filter,
+    process_pipeline_outlet_filter,
+)
+from open_webui.routers.retrieval import (
+    process_web_search,
+    SearchForm,
 )
 from open_webui.routers.tasks import (
     generate_queries,
@@ -40,45 +60,23 @@ from open_webui.routers.tasks import (
     generate_image_prompt,
     generate_chat_tags,
 )
-from open_webui.routers.retrieval import (
-    process_web_search,
-    SearchForm,
+from open_webui.socket.main import (
+    get_event_call,
+    get_event_emitter,
 )
-from open_webui.utils.tools import get_builtin_tools
-from open_webui.routers.images import (
-    image_generations,
-    CreateImageForm,
-    image_edits,
-    EditImageForm,
-)
-from open_webui.routers.pipelines import (
-    process_pipeline_inlet_filter,
-    process_pipeline_outlet_filter,
-)
-from open_webui.routers.memories import query_memory, QueryMemoryForm
-
-from open_webui.utils.webhook import post_webhook
+from open_webui.utils.chat import generate_chat_completion
+from open_webui.utils.code_interpreter import execute_code_jupyter
 from open_webui.utils.files import (
     convert_markdown_base64_images,
     get_file_url_from_base64,
     get_image_base64_from_url,
     get_image_url_from_base64,
 )
-
-
-from open_webui.models.users import UserModel
-from open_webui.models.functions import Functions
-from open_webui.models.models import Models
-
-from open_webui.retrieval.utils import get_sources_from_items
-
-
-from open_webui.utils.chat import generate_chat_completion
-from open_webui.utils.task import (
-    get_task_model_id,
-    rag_template,
-    tools_function_calling_generation_template,
+from open_webui.utils.filter import (
+    get_sorted_filter_ids,
+    process_filter_functions,
 )
+from open_webui.utils.mcp.client import MCPClient
 from open_webui.utils.misc import (
     deep_update,
     extract_urls,
@@ -93,40 +91,22 @@ from open_webui.utils.misc import (
     convert_logit_bias_input_to_json,
     get_content_from_message,
 )
+from open_webui.utils.misc import is_string_allowed
+from open_webui.utils.payload import apply_system_prompt_to_body
+from open_webui.utils.plugin import load_function_module_by_id
+from open_webui.utils.task import (
+    get_task_model_id,
+    rag_template,
+    tools_function_calling_generation_template,
+)
+from open_webui.utils.tools import get_builtin_tools
 from open_webui.utils.tools import (
     get_tools,
     get_updated_tool_function,
     has_tool_server_access,
 )
-from open_webui.utils.plugin import load_function_module_by_id
-from open_webui.utils.filter import (
-    get_sorted_filter_ids,
-    process_filter_functions,
-)
-from open_webui.utils.code_interpreter import execute_code_jupyter
-from open_webui.utils.payload import apply_system_prompt_to_body
-from open_webui.utils.mcp.client import MCPClient
-
-
-from open_webui.config import (
-    CACHE_DIR,
-    DEFAULT_VOICE_MODE_PROMPT_TEMPLATE,
-    DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
-    DEFAULT_CODE_INTERPRETER_PROMPT,
-    CODE_INTERPRETER_BLOCKED_MODULES,
-)
-from open_webui.env import (
-    GLOBAL_LOG_LEVEL,
-    ENABLE_CHAT_RESPONSE_BASE64_IMAGE_URL_CONVERSION,
-    CHAT_RESPONSE_STREAM_DELTA_CHUNK_SIZE,
-    CHAT_RESPONSE_MAX_TOOL_CALL_RETRIES,
-    BYPASS_MODEL_ACCESS_CONTROL,
-    ENABLE_REALTIME_CHAT_SAVE,
-    ENABLE_QUERIES_CACHE,
-    RAG_SYSTEM_CONTEXT,
-)
-from open_webui.constants import TASKS
-
+from open_webui.utils.webhook import post_webhook
+from starlette.responses import Response, StreamingResponse, JSONResponse
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)

@@ -71,7 +71,7 @@
 				stock,
 				category: category || null,
 				shop_id: shop_id,
-				access_control: {}
+				access_control: null // null = public, {} = private
 			});
 
 			if (res) {

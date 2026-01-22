@@ -132,18 +132,20 @@ class ProductTable:
     def _has_permission(self, db, query, filter: dict, permission: str = "read"):
         group_ids = filter.get("group_ids", [])
         user_id = filter.get("user_id")
+        shop_id = filter.get("shop_id")
         dialect_name = db.bind.dialect.name
 
         conditions = []
 
-        # Public access conditions
-        if group_ids or user_id:
-            conditions.extend(
-                [
-                    Product.access_control.is_(None),
-                    cast(Product.access_control, String) == "null",
-                ]
-            )
+        # Public access conditions - always show public products
+        # If shop_id is specified, show all public products in that shop
+        # Otherwise, show public products that user can access
+        conditions.extend(
+            [
+                Product.access_control.is_(None),
+                cast(Product.access_control, String) == "null",
+            ]
+        )
 
         # User-level permission (owner has all permissions)
         if user_id:
@@ -164,7 +166,8 @@ class ProductTable:
                             JSONB,
                         ).contains([gid])
                     )
-            conditions.append(or_(*group_conditions))
+            if group_conditions:
+                conditions.append(or_(*group_conditions))
 
         if conditions:
             query = query.filter(or_(*conditions))
@@ -241,6 +244,8 @@ class ProductTable:
                     query = query.filter(Product.user_id == user_id)
                 elif view_option == "shared":
                     query = query.filter(Product.user_id != user_id)
+                # If view_option is None or "all", don't filter by user_id here
+                # The _has_permission method will handle showing accessible products
 
                 # Apply access control filtering
                 if "permission" in filter:

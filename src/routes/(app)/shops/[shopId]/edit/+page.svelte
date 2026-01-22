@@ -64,7 +64,8 @@
 
 		loading = true;
 		try {
-			const res = await updateShopById(localStorage.token, $page.params.id, {
+			const shopId = $page.params.shopId;
+			const res = await updateShopById(localStorage.token, shopId, {
 				name,
 				description: description || null,
 				image_url: imageFileId || shop.image_url || null
@@ -88,7 +89,8 @@
 		}
 
 		try {
-			const res = await getShopById(localStorage.token, $page.params.id);
+			const shopId = $page.params.shopId;
+			const res = await getShopById(localStorage.token, shopId);
 			if (res) {
 				shop = res;
 				if ($user.id !== res.user_id && $user.role !== 'admin') {

@@ -53,7 +53,7 @@
 						<div
 							class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium bg-transparent py-1 touch-auto pointer-events-auto"
 						>
-							<a class="min-w-fit transition" href="/shops/{$page.params.id}/products">
+							<a class="min-w-fit transition" href="/shops/{$page.params.shopId}/products">
 								{$i18n.t('Products')}
 							</a>
 						</div>
@@ -86,7 +86,7 @@
 		</nav>
 
 		<div class="flex-1 overflow-hidden">
-			<Products shopId={$page.params.id} showCreateButton={true} />
+			<Products shopId={$page.params.shopId} showCreateButton={true} />
 		</div>
 	</div>
 {/if}

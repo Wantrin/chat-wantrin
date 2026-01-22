@@ -69,13 +69,14 @@
 				image_urls: imageFileIds,
 				stock,
 				category: category || null,
-				shop_id: $page.params.id,
-				access_control: {}
+				shop_id: $page.params.shopId,
+				access_control: null // null = public, {} = private
 			});
 
 			if (res) {
 				toast.success($i18n.t('Product created successfully'));
-				goto(`/shops/${$page.params.id}/products/${res.id}`);
+				const shopId = $page.params.shopId;
+				goto(`/shops/${shopId}/products/${res.id}`, { replaceState: false });
 			}
 		} catch (error) {
 			toast.error(`${error}`);
@@ -193,7 +194,10 @@
 			</button>
 			<button
 				type="button"
-				on:click={() => goto(`/shops/${$page.params.id}/products`)}
+				on:click={() => {
+					const shopId = $page.params.shopId;
+					goto(`/shops/${shopId}/products`);
+				}}
 				class="px-6 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-lg transition"
 			>
 				{$i18n.t('Cancel')}

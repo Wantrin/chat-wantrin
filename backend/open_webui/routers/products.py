@@ -141,7 +141,19 @@ async def search_products(
         if groups:
             filter["group_ids"] = [group.id for group in groups]
 
-        filter["user_id"] = user.id
+        # When shop_id is specified, show all accessible products in that shop
+        # (public products + user's products + shared products)
+        # When shop_id is not specified, only show user's products and accessible products
+        if shop_id:
+            # For shop pages, show all accessible products (public + user's + shared)
+            # The _has_permission method will handle showing public products and user's products
+            filter["user_id"] = user.id
+        elif view_option == "shared":
+            # For "shared" view, don't add user_id (handled in search_products)
+            pass
+        else:
+            # Default: show user's products and accessible products
+            filter["user_id"] = user.id
 
     return Products.search_products(user.id, filter, skip=skip, limit=limit, db=db)
 

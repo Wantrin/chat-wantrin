@@ -2,7 +2,13 @@
 	import { toast } from 'svelte-sonner';
 	import { onMount, getContext } from 'svelte';
 
-	const i18n = getContext('i18n');
+	let i18n;
+	try {
+		i18n = getContext('i18n');
+	} catch (e) {
+		console.error('i18n context is not available in Products component:', e);
+		i18n = null;
+	}
 
 	import { goto } from '$app/navigation';
 	import { user } from '$lib/stores';
@@ -19,6 +25,7 @@
 
 	export let viewOption: string | null = null;
 	export let shopId: string | null = null;
+	export let showCreateButton: boolean = false;
 
 	let loaded = false;
 
@@ -39,7 +46,13 @@
 	let allItemsLoaded = false;
 
 	const deleteProductHandler = async (id) => {
-		const res = await deleteProductById(localStorage.token, id).catch((error) => {
+		const token = typeof window !== 'undefined' ? localStorage.token : '';
+		if (!token) {
+			toast.error('No token available');
+			return;
+		}
+
+		const res = await deleteProductById(token, id).catch((error) => {
 			toast.error(`${error}`);
 			return null;
 		});
@@ -61,8 +74,17 @@
 		reset();
 
 		try {
+			const token = typeof window !== 'undefined' ? localStorage.token : '';
+			if (!token) {
+				console.error('No token available');
+				items = [];
+				total = 0;
+				itemsLoading = false;
+				return;
+			}
+
 			const res = await searchProducts(
-				localStorage.token,
+				token,
 				query || null,
 				category || null,
 				shopId || null,
@@ -73,15 +95,24 @@
 				page
 			);
 
+			console.log('Products search result:', res);
+
 			if (res) {
 				items = res.items || [];
 				total = res.total || 0;
 
+				console.log('Products items:', items, 'Total:', total);
+
 				if (items.length >= total) {
 					allItemsLoaded = true;
 				}
+			} else {
+				console.log('No products found or API returned null');
+				items = [];
+				total = 0;
 			}
 		} catch (error) {
+			console.error('Error loading products:', error);
 			toast.error(`${error}`);
 		} finally {
 			itemsLoading = false;
@@ -95,8 +126,15 @@
 		page += 1;
 
 		try {
+			const token = typeof window !== 'undefined' ? localStorage.token : '';
+			if (!token) {
+				console.error('No token available');
+				itemsLoading = false;
+				return;
+			}
+
 			const res = await searchProducts(
-				localStorage.token,
+				token,
 				query || null,
 				category || null,
 				shopId || null,
@@ -120,18 +158,18 @@
 		}
 	};
 
-	$: if (loaded) {
+	$: if (loaded && typeof window !== 'undefined') {
 		init();
 	}
 
-	$: if (query !== undefined || category !== undefined || sortKey !== undefined || viewOption !== undefined) {
-		if (loaded) {
-			init();
-		}
+	$: if ((query !== undefined || category !== undefined || sortKey !== undefined || viewOption !== undefined) && loaded && typeof window !== 'undefined') {
+		init();
 	}
 
 	onMount(() => {
-		loaded = true;
+		if (typeof window !== 'undefined') {
+			loaded = true;
+		}
 	});
 </script>
 

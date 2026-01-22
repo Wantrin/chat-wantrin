@@ -1,10 +1,17 @@
 <script>
 	import { getContext, onMount } from 'svelte';
 
-	const i18n = getContext('i18n');
+	let i18n;
+	try {
+		i18n = getContext('i18n');
+	} catch (e) {
+		console.error('i18n context not available:', e);
+		i18n = null;
+	}
 
 	import { mobile, showSidebar, user } from '$lib/stores';
-	import { goto, page } from '$app/stores';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 
 	import UserMenu from '$lib/components/layout/Sidebar/UserMenu.svelte';
 	import Products from '$lib/components/products/Products.svelte';
@@ -15,7 +22,9 @@
 	let loaded = false;
 
 	onMount(() => {
-		loaded = true;
+		if (typeof window !== 'undefined') {
+			loaded = true;
+		}
 	});
 </script>
 

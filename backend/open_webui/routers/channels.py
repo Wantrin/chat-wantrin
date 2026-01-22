@@ -2,6 +2,7 @@ import json
 import logging
 import base64
 import io
+import os
 from typing import Optional
 
 
@@ -1883,7 +1884,12 @@ async def get_webhook_profile_image(
     webhook = Channels.get_webhook_by_id(webhook_id, db=db)
     if not webhook:
         # Return default favicon if webhook not found
-        return FileResponse(f"{STATIC_DIR}/favicon.png")
+        favicon_path = f"{STATIC_DIR}/favicon.png"
+        if os.path.exists(favicon_path):
+            return FileResponse(favicon_path)
+        else:
+            # Return empty response if favicon doesn't exist
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     if webhook.profile_image_url:
         # Check if it's url or base64
@@ -1908,7 +1914,12 @@ async def get_webhook_profile_image(
                 pass
 
     # Return default favicon if no profile image
-    return FileResponse(f"{STATIC_DIR}/favicon.png")
+    favicon_path = f"{STATIC_DIR}/favicon.png"
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    else:
+        # Return empty response if favicon doesn't exist
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{id}/webhooks", response_model=list[ChannelWebhookModel])
