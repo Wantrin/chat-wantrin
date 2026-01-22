@@ -6,6 +6,9 @@ import type { Socket } from 'socket.io-client';
 
 import emojiShortCodes from '$lib/emoji-shortcodes.json';
 
+// Export cart store
+export { cart } from './cart';
+
 // Backend
 export const WEBUI_NAME = writable(APP_NAME);
 

@@ -6,6 +6,8 @@
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import DropdownOptions from '../common/DropdownOptions.svelte';
+	import { copyToClipboard } from '$lib/utils';
+	import { toast } from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -13,6 +15,8 @@
 	export let item;
 
 	let showMenu = false;
+
+	$: shopIdentifier = item.url || item.id;
 
 	$: imageUrl = item.image_url
 		? item.image_url.startsWith('http')
@@ -25,11 +29,11 @@
 	class="group bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-600 hover:-translate-y-1"
 	role="button"
 	tabindex="0"
-	on:click={() => goto(`/shops/${item.id}`)}
+	on:click={() => goto(`/shops/${shopIdentifier}`)}
 	on:keydown={(e) => {
 		if (e.key === 'Enter' || e.key === ' ') {
 			e.preventDefault();
-			goto(`/shops/${item.id}`);
+			goto(`/shops/${shopIdentifier}`);
 		}
 	}}
 >
@@ -70,21 +74,39 @@
 								{
 									label: $i18n.t('Edit'),
 									action: () => {
-										goto(`/shops/${item.id}/edit`);
+										goto(`/shops/${shopIdentifier}/edit`);
 										showMenu = false;
 									}
 								},
 								{
 									label: $i18n.t('Add Product'),
 									action: () => {
-										goto(`/shops/${item.id}/products/create`);
+										goto(`/shops/${shopIdentifier}/products/create`);
 										showMenu = false;
 									}
 								},
 								{
 									label: $i18n.t('View Products'),
 									action: () => {
-										goto(`/shops/${item.id}/products`);
+										goto(`/shops/${shopIdentifier}/products`);
+										showMenu = false;
+									}
+								},
+								{
+									label: $i18n.t('Copy Public URL'),
+									action: async () => {
+										if (item.access_control === null) {
+											const identifier = item.url || item.id;
+											const publicUrl = typeof window !== 'undefined' 
+												? `${window.location.origin}/public/shops/${identifier}`
+												: '';
+											if (publicUrl) {
+												await copyToClipboard(publicUrl);
+												toast.success($i18n.t('Public URL copied!'));
+											}
+										} else {
+											toast.error($i18n.t('This shop is not public'));
+										}
 										showMenu = false;
 									}
 								},

@@ -258,3 +258,101 @@ export const deleteProductById = async (token: string, id: string) => {
 
 	return res;
 };
+
+// Public API functions (no authentication required)
+export const getPublicProductById = async (id: string) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/products/public/${id}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json'
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.then((json) => {
+			return json;
+		})
+		.catch((err) => {
+			error = err.detail;
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const searchPublicProducts = async (
+	query: string | null = null,
+	category: string | null = null,
+	currency: string | null = null,
+	shopId: string | null = null,
+	orderBy: string | null = null,
+	direction: string | null = null,
+	page: number | null = null
+) => {
+	let error = null;
+	const searchParams = new URLSearchParams();
+
+	if (query !== null) {
+		searchParams.append('query', query);
+	}
+
+	if (category !== null) {
+		searchParams.append('category', category);
+	}
+
+	if (currency !== null) {
+		searchParams.append('currency', currency);
+	}
+
+	if (shopId !== null) {
+		searchParams.append('shop_id', shopId);
+	}
+
+	if (orderBy !== null) {
+		searchParams.append('order_by', orderBy);
+	}
+
+	if (direction !== null) {
+		searchParams.append('direction', direction);
+	}
+
+	if (page !== null) {
+		searchParams.append('page', `${page}`);
+	}
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/products/public/search?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json'
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.then((json) => {
+			return json;
+		})
+		.catch((err) => {
+			error = err.detail;
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};

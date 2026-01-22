@@ -62,6 +62,7 @@
 	import Sidebar from '../icons/Sidebar.svelte';
 	import PinnedModelList from './Sidebar/PinnedModelList.svelte';
 	import Note from '../icons/Note.svelte';
+	import DocumentCheck from '../icons/DocumentCheck.svelte';
 	import { slide } from 'svelte/transition';
 	import HotkeyHint from '../common/HotkeyHint.svelte';
 
@@ -724,6 +725,22 @@
 				</Tooltip>
 			{/if}
 
+			{#if $user?.role === 'admin' || ($user?.permissions?.features?.task_items ?? true)}
+				<Tooltip content={$i18n.t('Tasks')} placement="right">
+					<a
+						class="flex rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-300 w-full justify-center py-2.5 shadow-sm hover:shadow-md border border-transparent hover:border-green-200 dark:hover:border-green-800 group"
+						href="/task_items"
+						on:click={itemClickHandler}
+						draggable="false"
+						aria-label={$i18n.t('Tasks')}
+					>
+						<div class="self-center text-gray-700 dark:text-gray-300 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">
+							<DocumentCheck className="size-4.5" strokeWidth="2" />
+						</div>
+					</a>
+				</Tooltip>
+			{/if}
+
 			{#if $user?.role === 'admin' || ($user?.permissions?.features?.products ?? true)}
 				<Tooltip content={$i18n.t('Shop')} placement="right">
 					<a
@@ -1000,6 +1017,27 @@
 
 								<div class="flex self-center translate-y-[0.5px]">
 									<div class=" self-center text-sm font-primary">{$i18n.t('Notes')}</div>
+								</div>
+							</a>
+						</div>
+					{/if}
+
+					{#if $user?.role === 'admin' || ($user?.permissions?.features?.task_items ?? true)}
+						<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
+							<a
+								id="sidebar-task-items-button"
+								class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+								href="/task_items"
+								on:click={itemClickHandler}
+								draggable="false"
+								aria-label={$i18n.t('Tasks')}
+							>
+								<div class="self-center">
+									<DocumentCheck className="size-4.5" strokeWidth="2" />
+								</div>
+
+								<div class="flex self-center translate-y-[0.5px]">
+									<div class=" self-center text-sm font-primary">{$i18n.t('Tasks')}</div>
 								</div>
 							</a>
 						</div>
@@ -1503,9 +1541,9 @@
 			on:mousedown={resizeStartHandler}
 			role="separator"
 		>
-			<div
-				class=" absolute -left-1.5 -right-1.5 -top-0 -bottom-0 z-20 cursor-col-resize bg-transparent"
-			/>
+		<div
+			class=" absolute -left-1.5 -right-1.5 -top-0 -bottom-0 z-20 cursor-col-resize bg-transparent"
+		></div>
 		</div>
 	{/if}
 {/if}

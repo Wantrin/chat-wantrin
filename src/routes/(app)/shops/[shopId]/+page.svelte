@@ -7,11 +7,15 @@
 	import { getShopById } from '$lib/apis/shops';
 	import { user, showSidebar } from '$lib/stores';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import ShareShopModal from '$lib/components/shops/ShareShopModal.svelte';
 
 	const i18n = getContext('i18n');
 
 	let shop = null;
 	let loading = true;
+	let showShareModal = false;
+
+	$: shopIdentifier = shop ? (shop.url || shop.id) : null;
 
 	$: imageUrl = shop?.image_url
 		? shop.image_url.startsWith('http')
@@ -75,28 +79,45 @@
 					{#if $user && ($user.id === shop.user_id || $user.role === 'admin')}
 						<div class="mt-6 flex gap-3 flex-wrap">
 							<button
-								on:click={() => goto(`/shops/${shop.id}/edit`)}
+								on:click={() => goto(`/shops/${shopIdentifier}/edit`)}
 								class="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
 							>
 								{$i18n.t('Edit Shop')}
 							</button>
 							<button
-								on:click={() => goto(`/shops/${shop.id}/products/create`)}
+								on:click={() => goto(`/shops/${shopIdentifier}/products/create`)}
 								class="px-6 py-3 bg-gradient-to-r from-blue-500 to-orange-600 hover:from-blue-600 hover:to-orange-700 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
 							>
 								{$i18n.t('Add Product')}
 							</button>
 							<button
-								on:click={() => goto(`/shops/${shop.id}/products`)}
+								on:click={() => goto(`/shops/${shopIdentifier}/products`)}
 								class="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
 							>
 								{$i18n.t('View Products')}
+							</button>
+							<button
+								on:click={() => goto(`/shops/${shopIdentifier}/orders`)}
+								class="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+							>
+								{$i18n.t('View Orders')}
+							</button>
+							<button
+								on:click={() => {
+									showShareModal = true;
+								}}
+								class="px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5 flex items-center gap-2"
+							>
+								<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+								</svg>
+								{$i18n.t('Share Shop')}
 							</button>
 						</div>
 					{:else}
 						<div class="mt-6">
 							<button
-								on:click={() => goto(`/shops/${shop.id}/products`)}
+								on:click={() => goto(`/shops/${shopIdentifier}/products`)}
 								class="px-8 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
 							>
 								{$i18n.t('View Products')}
@@ -108,4 +129,6 @@
 		</div>
 		</div>
 	</div>
+
+	<ShareShopModal bind:show={showShareModal} {shop} />
 {/if}

@@ -1,17 +1,19 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { getTimeRange } from '$lib/utils';
 
-type ShopItem = {
-	name: string;
+type TaskItem = {
+	title: string;
 	description?: string | null;
-	image_url?: string | null;
+	completed?: boolean;
+	data?: object;
 	meta?: null | object;
 	access_control?: null | object;
 };
 
-export const createNewShop = async (token: string, shop: ShopItem) => {
+export const createNewTaskItem = async (token: string, taskItem: TaskItem) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/shops/create`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/task_items/create`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -19,7 +21,7 @@ export const createNewShop = async (token: string, shop: ShopItem) => {
 			authorization: `Bearer ${token}`
 		},
 		body: JSON.stringify({
-			...shop
+			...taskItem
 		})
 	})
 		.then(async (res) => {
@@ -39,15 +41,10 @@ export const createNewShop = async (token: string, shop: ShopItem) => {
 	return res;
 };
 
-export const getShops = async (token: string = '', page: number | null = null) => {
+export const getTaskItems = async (token: string = '', raw: boolean = false) => {
 	let error = null;
-	const searchParams = new URLSearchParams();
 
-	if (page !== null) {
-		searchParams.append('page', `${page}`);
-	}
-
-	const res = await fetch(`${WEBUI_API_BASE_URL}/shops/?${searchParams.toString()}`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/task_items/`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -72,16 +69,37 @@ export const getShops = async (token: string = '', page: number | null = null) =
 		throw error;
 	}
 
-	return res;
+	if (raw) {
+		return res; // Return raw response if requested
+	}
+
+	if (!Array.isArray(res)) {
+		return {}; // or throw new Error("TaskItems response is not an array")
+	}
+
+	// Build the grouped object
+	const grouped: Record<string, any[]> = {};
+	for (const taskItem of res) {
+		const timeRange = getTimeRange(taskItem.updated_at / 1000000000);
+		if (!grouped[timeRange]) {
+			grouped[timeRange] = [];
+		}
+		grouped[timeRange].push({
+			...taskItem,
+			timeRange
+		});
+	}
+
+	return grouped;
 };
 
-export const searchShops = async (
+export const searchTaskItems = async (
 	token: string = '',
 	query: string | null = null,
 	viewOption: string | null = null,
 	permission: string | null = null,
-	orderBy: string | null = null,
-	direction: string | null = null,
+	completed: boolean | null = null,
+	sortKey: string | null = null,
 	page: number | null = null
 ) => {
 	let error = null;
@@ -99,19 +117,19 @@ export const searchShops = async (
 		searchParams.append('permission', permission);
 	}
 
-	if (orderBy !== null) {
-		searchParams.append('order_by', orderBy);
+	if (completed !== null) {
+		searchParams.append('completed', completed.toString());
 	}
 
-	if (direction !== null) {
-		searchParams.append('direction', direction);
+	if (sortKey !== null) {
+		searchParams.append('order_by', sortKey);
 	}
 
 	if (page !== null) {
 		searchParams.append('page', `${page}`);
 	}
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/shops/search?${searchParams.toString()}`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/task_items/search?${searchParams.toString()}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -139,10 +157,46 @@ export const searchShops = async (
 	return res;
 };
 
-export const getShopById = async (token: string, id: string) => {
+export const getTaskItemList = async (token: string = '', page: number | null = null) => {
+	let error = null;
+	const searchParams = new URLSearchParams();
+
+	if (page !== null) {
+		searchParams.append('page', `${page}`);
+	}
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/task_items/?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.then((json) => {
+			return json;
+		})
+		.catch((err) => {
+			error = err.detail;
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const getTaskItemById = async (token: string, id: string) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/shops/${id}`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/task_items/${id}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -171,10 +225,10 @@ export const getShopById = async (token: string, id: string) => {
 	return res;
 };
 
-export const updateShopById = async (token: string, id: string, shop: Partial<ShopItem>) => {
+export const updateTaskItemById = async (token: string, id: string, taskItem: TaskItem) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/shops/${id}/update`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/task_items/${id}/update`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -182,7 +236,7 @@ export const updateShopById = async (token: string, id: string, shop: Partial<Sh
 			authorization: `Bearer ${token}`
 		},
 		body: JSON.stringify({
-			...shop
+			...taskItem
 		})
 	})
 		.then(async (res) => {
@@ -206,10 +260,10 @@ export const updateShopById = async (token: string, id: string, shop: Partial<Sh
 	return res;
 };
 
-export const deleteShopById = async (token: string, id: string) => {
+export const deleteTaskItemById = async (token: string, id: string) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/shops/${id}/delete`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/task_items/${id}/delete`, {
 		method: 'DELETE',
 		headers: {
 			Accept: 'application/json',
@@ -227,89 +281,6 @@ export const deleteShopById = async (token: string, id: string) => {
 		.catch((err) => {
 			error = err.detail;
 
-			console.error(err);
-			return null;
-		});
-
-	if (error) {
-		throw error;
-	}
-
-	return res;
-};
-
-// Public API functions (no authentication required)
-export const getPublicShopById = async (id: string) => {
-	let error = null;
-
-	const res = await fetch(`${WEBUI_API_BASE_URL}/shops/public/${id}`, {
-		method: 'GET',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json'
-		}
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.then((json) => {
-			return json;
-		})
-		.catch((err) => {
-			error = err.detail;
-			console.error(err);
-			return null;
-		});
-
-	if (error) {
-		throw error;
-	}
-
-	return res;
-};
-
-export const searchPublicShops = async (
-	query: string | null = null,
-	orderBy: string | null = null,
-	direction: string | null = null,
-	page: number | null = null
-) => {
-	let error = null;
-	const searchParams = new URLSearchParams();
-
-	if (query !== null) {
-		searchParams.append('query', query);
-	}
-
-	if (orderBy !== null) {
-		searchParams.append('order_by', orderBy);
-	}
-
-	if (direction !== null) {
-		searchParams.append('direction', direction);
-	}
-
-	if (page !== null) {
-		searchParams.append('page', `${page}`);
-	}
-
-	const res = await fetch(`${WEBUI_API_BASE_URL}/shops/public/search?${searchParams.toString()}`, {
-		method: 'GET',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json'
-		}
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.then((json) => {
-			return json;
-		})
-		.catch((err) => {
-			error = err.detail;
 			console.error(err);
 			return null;
 		});

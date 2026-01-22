@@ -362,3 +362,79 @@ async def delete_product_by_id(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()
         )
+
+
+############################
+# Public Product Endpoints (No Authentication Required)
+############################
+
+
+@router.get("/public/{id}", response_model=Optional[ProductModel])
+async def get_public_product_by_id(
+    request: Request,
+    id: str,
+    db: Session = Depends(get_session),
+):
+    """
+    Public endpoint to get a product by ID.
+    Only returns products that are public (access_control is None).
+    """
+    product = Products.get_product_by_id(id, db=db)
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+    # Only return public products (access_control is None)
+    if product.access_control is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+    return product
+
+
+@router.get("/public/search", response_model=ProductListResponse)
+async def search_public_products(
+    request: Request,
+    query: Optional[str] = None,
+    category: Optional[str] = None,
+    currency: Optional[str] = None,
+    shop_id: Optional[str] = None,
+    order_by: Optional[str] = None,
+    direction: Optional[str] = None,
+    page: Optional[int] = 1,
+    db: Session = Depends(get_session),
+):
+    """
+    Public endpoint to search for public products.
+    Only returns products that are public (access_control is None).
+    """
+    limit = None
+    skip = None
+    if page is not None:
+        limit = 60
+        skip = (page - 1) * limit
+
+    filter = {}
+    if query:
+        filter["query"] = query
+    if category:
+        filter["category"] = category
+    if currency:
+        filter["currency"] = currency
+    if shop_id:
+        filter["shop_id"] = shop_id
+    if order_by:
+        filter["order_by"] = order_by
+    if direction:
+        filter["direction"] = direction
+
+    # Only show public products (access_control is None)
+    # We'll use None as user_id to indicate public access
+    filter["permission"] = "read"
+
+    # Get all public products (user_id=None means public access only)
+    result = Products.search_products(None, filter, skip=skip, limit=limit, db=db)
+    
+    return result

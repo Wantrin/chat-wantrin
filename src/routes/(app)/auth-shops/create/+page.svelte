@@ -12,9 +12,11 @@
 
 	let name = '';
 	let description = '';
+	let url = '';
 	let imageFile: File | null = null;
 	let imagePreview: string | null = null;
 	let imageFileId: string | null = null;
+	let isPublic = false;
 	let loading = false;
 	let uploadingImage = false;
 
@@ -53,6 +55,12 @@
 		}
 	};
 
+	const sanitizeUrl = (inputUrl: string): string => {
+		if (!inputUrl) return '';
+		// Remove spaces and convert to lowercase
+		return inputUrl.replace(/\s+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+	};
+
 	const handleSubmit = async () => {
 		if (!name) {
 			toast.error($i18n.t('Please fill in all required fields'));
@@ -61,11 +69,13 @@
 
 		loading = true;
 		try {
+			const sanitizedUrl = url ? sanitizeUrl(url) : null;
 			const res = await createNewShop(localStorage.token, {
 				name,
 				description: description || null,
 				image_url: imageFileId || null,
-				access_control: {}
+				url: sanitizedUrl || null,
+				access_control: isPublic ? null : {}
 			});
 
 			if (res) {
@@ -142,6 +152,48 @@
 						</div>
 					{/if}
 				</div>
+			</div>
+
+			<div>
+				<label class="block text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
+					{$i18n.t('Shop URL')} <span class="text-gray-400 text-xs">({$i18n.t('optional')})</span>
+				</label>
+				<div class="flex items-center gap-2">
+					<span class="text-sm text-gray-500 dark:text-gray-400">/public/shops/</span>
+					<input
+						type="text"
+						bind:value={url}
+						placeholder={$i18n.t('my-shop-url')}
+						pattern="[a-z0-9\-]+"
+						on:input={(e) => {
+							// Remove spaces and invalid characters in real-time
+							const sanitized = sanitizeUrl(e.target.value);
+							if (sanitized !== e.target.value) {
+								url = sanitized;
+							}
+						}}
+						class="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all shadow-sm hover:shadow-md"
+					/>
+				</div>
+				<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+					{$i18n.t('Leave empty to auto-generate from shop name. Only lowercase letters, numbers, and hyphens allowed. Spaces will be automatically converted to hyphens.')}
+				</p>
+			</div>
+
+			<div>
+				<label class="flex items-center gap-3 cursor-pointer">
+					<input
+						type="checkbox"
+						bind:checked={isPublic}
+						class="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+					/>
+					<span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+						{$i18n.t('Make this shop public')}
+					</span>
+				</label>
+				<p class="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-8">
+					{$i18n.t('Public shops can be accessed by anyone via a shareable URL without requiring login')}
+				</p>
 			</div>
 
 			<div class="flex gap-4 pt-4">

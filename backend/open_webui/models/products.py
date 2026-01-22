@@ -216,7 +216,7 @@ class ProductTable:
 
     def search_products(
         self,
-        user_id: str,
+        user_id: Optional[str],
         filter: dict = {},
         skip: int = 0,
         limit: int = 30,
@@ -253,9 +253,9 @@ class ProductTable:
                     query = query.filter(Product.shop_id == shop_id)
 
                 view_option = filter.get("view_option")
-                if view_option == "created":
+                if view_option == "created" and user_id:
                     query = query.filter(Product.user_id == user_id)
-                elif view_option == "shared":
+                elif view_option == "shared" and user_id:
                     query = query.filter(Product.user_id != user_id)
                 # If view_option is None or "all", don't filter by user_id here
                 # The _has_permission method will handle showing accessible products
@@ -266,12 +266,21 @@ class ProductTable:
                 else:
                     permission = "read"
 
-                query = self._has_permission(
-                    db,
-                    query,
-                    filter,
-                    permission=permission,
-                )
+                # For public access (user_id is None), only show public products
+                if user_id is None:
+                    query = query.filter(
+                        or_(
+                            Product.access_control.is_(None),
+                            cast(Product.access_control, String) == "null",
+                        )
+                    )
+                else:
+                    query = self._has_permission(
+                        db,
+                        query,
+                        filter,
+                        permission=permission,
+                    )
 
                 order_by = filter.get("order_by")
                 direction = filter.get("direction")

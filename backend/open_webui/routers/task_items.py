@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Optional
 
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
 from pydantic import BaseModel
 
@@ -9,13 +10,13 @@ from open_webui.socket.main import sio
 
 from open_webui.models.groups import Groups
 from open_webui.models.users import Users, UserResponse
-from open_webui.models.shops import (
-    ShopListResponse,
-    Shops,
-    ShopModel,
-    ShopForm,
-    ShopUpdateForm,
-    ShopUserResponse,
+from open_webui.models.task_items import (
+    TaskItemListResponse,
+    TaskItems,
+    TaskItemModel,
+    TaskItemForm,
+    TaskItemUpdateForm,
+    TaskItemUserResponse,
 )
 
 from open_webui.config import (
@@ -24,6 +25,7 @@ from open_webui.config import (
     ENABLE_ADMIN_EXPORT,
 )
 from open_webui.constants import ERROR_MESSAGES
+
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_access, has_permission
@@ -35,29 +37,30 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 ############################
-# GetShops
+# GetTaskItems
 ############################
 
 
-class ShopItemResponse(BaseModel):
+class TaskItemItemResponse(BaseModel):
     id: str
-    name: str
-    description: Optional[str]
-    image_url: Optional[str]
+    title: str
+    description: Optional[str] = None
+    completed: bool = False
+    data: Optional[dict] = None
     updated_at: int
     created_at: int
     user: Optional[UserResponse] = None
 
 
-@router.get("/", response_model=list[ShopItemResponse])
-async def get_shops(
+@router.get("/", response_model=list[TaskItemItemResponse])
+async def get_task_items(
     request: Request,
     page: Optional[int] = None,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
     if user.role != "admin" and not has_permission(
-        user.id, "features.shops", request.app.state.config.USER_PERMISSIONS, db=db
+        user.id, "features.task_items", request.app.state.config.USER_PERMISSIONS, db=db
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -70,31 +73,32 @@ async def get_shops(
         limit = 60
         skip = (page - 1) * limit
 
-    shops = Shops.get_shops_by_user_id(user.id, "read", skip=skip, limit=limit, db=db)
-    if not shops:
+    task_items = TaskItems.get_task_items_by_user_id(user.id, "read", skip=skip, limit=limit, db=db)
+    if not task_items:
         return []
 
-    user_ids = list(set(shop.user_id for shop in shops))
+    user_ids = list(set(task_item.user_id for task_item in task_items))
     users = {user.id: user for user in Users.get_users_by_user_ids(user_ids, db=db)}
 
     return [
-        ShopUserResponse(
+        TaskItemUserResponse(
             **{
-                **shop.model_dump(),
-                "user": UserResponse(**users[shop.user_id].model_dump()),
+                **task_item.model_dump(),
+                "user": UserResponse(**users[task_item.user_id].model_dump()),
             }
         )
-        for shop in shops
-        if shop.user_id in users
+        for task_item in task_items
+        if task_item.user_id in users
     ]
 
 
-@router.get("/search", response_model=ShopListResponse)
-async def search_shops(
+@router.get("/search", response_model=TaskItemListResponse)
+async def search_task_items(
     request: Request,
     query: Optional[str] = None,
     view_option: Optional[str] = None,
     permission: Optional[str] = None,
+    completed: Optional[bool] = None,
     order_by: Optional[str] = None,
     direction: Optional[str] = None,
     page: Optional[int] = 1,
@@ -102,7 +106,7 @@ async def search_shops(
     db: Session = Depends(get_session),
 ):
     if user.role != "admin" and not has_permission(
-        user.id, "features.shops", request.app.state.config.USER_PERMISSIONS, db=db
+        user.id, "features.task_items", request.app.state.config.USER_PERMISSIONS, db=db
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -122,6 +126,8 @@ async def search_shops(
         filter["view_option"] = view_option
     if permission:
         filter["permission"] = permission
+    if completed is not None:
+        filter["completed"] = completed
     if order_by:
         filter["order_by"] = order_by
     if direction:
@@ -134,23 +140,23 @@ async def search_shops(
 
         filter["user_id"] = user.id
 
-    return Shops.search_shops(user.id, filter, skip=skip, limit=limit, db=db)
+    return TaskItems.search_task_items(user.id, filter, skip=skip, limit=limit, db=db)
 
 
 ############################
-# CreateNewShop
+# CreateNewTaskItem
 ############################
 
 
-@router.post("/create", response_model=Optional[ShopModel])
-async def create_new_shop(
+@router.post("/create", response_model=Optional[TaskItemModel])
+async def create_new_task_item(
     request: Request,
-    form_data: ShopForm,
+    form_data: TaskItemForm,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
     if user.role != "admin" and not has_permission(
-        user.id, "features.shops", request.app.state.config.USER_PERMISSIONS, db=db
+        user.id, "features.task_items", request.app.state.config.USER_PERMISSIONS, db=db
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -158,8 +164,8 @@ async def create_new_shop(
         )
 
     try:
-        shop = Shops.insert_new_shop(user.id, form_data, db=db)
-        return shop
+        task_item = TaskItems.insert_new_task_item(user.id, form_data, db=db)
+        return task_item
     except Exception as e:
         log.exception(e)
         raise HTTPException(
@@ -168,40 +174,40 @@ async def create_new_shop(
 
 
 ############################
-# GetShopById
+# GetTaskItemById
 ############################
 
 
-class ShopResponse(ShopModel):
+class TaskItemResponse(TaskItemModel):
     write_access: bool = False
 
 
-@router.get("/{identifier}", response_model=Optional[ShopResponse])
-async def get_shop_by_id_or_url(
+@router.get("/{id}", response_model=Optional[TaskItemResponse])
+async def get_task_item_by_id(
     request: Request,
-    identifier: str,
+    id: str,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
     if user.role != "admin" and not has_permission(
-        user.id, "features.shops", request.app.state.config.USER_PERMISSIONS, db=db
+        user.id, "features.task_items", request.app.state.config.USER_PERMISSIONS, db=db
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,
         )
 
-    shop = Shops.get_shop_by_id_or_url(identifier, db=db)
-    if not shop:
+    task_item = TaskItems.get_task_item_by_id(id, db=db)
+    if not task_item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
 
     if user.role != "admin" and (
-        user.id != shop.user_id
+        user.id != task_item.user_id
         and (
             not has_access(
-                user.id, type="read", access_control=shop.access_control, db=db
+                user.id, type="read", access_control=task_item.access_control, db=db
             )
         )
     ):
@@ -211,50 +217,50 @@ async def get_shop_by_id_or_url(
 
     write_access = (
         user.role == "admin"
-        or (user.id == shop.user_id)
+        or (user.id == task_item.user_id)
         or has_access(
             user.id,
             type="write",
-            access_control=shop.access_control,
+            access_control=task_item.access_control,
             strict=False,
             db=db,
         )
     )
 
-    return ShopResponse(**shop.model_dump(), write_access=write_access)
+    return TaskItemResponse(**task_item.model_dump(), write_access=write_access)
 
 
 ############################
-# UpdateShopById
+# UpdateTaskItemById
 ############################
 
 
-@router.post("/{identifier}/update", response_model=Optional[ShopModel])
-async def update_shop_by_id_or_url(
+@router.post("/{id}/update", response_model=Optional[TaskItemModel])
+async def update_task_item_by_id(
     request: Request,
-    identifier: str,
-    form_data: ShopUpdateForm,
+    id: str,
+    form_data: TaskItemForm,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
     if user.role != "admin" and not has_permission(
-        user.id, "features.shops", request.app.state.config.USER_PERMISSIONS, db=db
+        user.id, "features.task_items", request.app.state.config.USER_PERMISSIONS, db=db
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,
         )
 
-    shop = Shops.get_shop_by_id_or_url(identifier, db=db)
-    if not shop:
+    task_item = TaskItems.get_task_item_by_id(id, db=db)
+    if not task_item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
 
     if user.role != "admin" and (
-        user.id != shop.user_id
+        user.id != task_item.user_id
         and not has_access(
-            user.id, type="write", access_control=shop.access_control, db=db
+            user.id, type="write", access_control=task_item.access_control, db=db
         )
     ):
         raise HTTPException(
@@ -267,7 +273,7 @@ async def update_shop_by_id_or_url(
         and form_data.access_control == None
         and not has_permission(
             user.id,
-            "sharing.public_shops",
+            "sharing.public_task_items",
             request.app.state.config.USER_PERMISSIONS,
             db=db,
         )
@@ -275,14 +281,15 @@ async def update_shop_by_id_or_url(
         form_data.access_control = {}
 
     try:
-        shop = Shops.update_shop_by_id(shop.id, form_data, db=db)
+        update_form = TaskItemUpdateForm(**form_data.model_dump())
+        task_item = TaskItems.update_task_item_by_id(id, update_form, db=db)
         await sio.emit(
-            "shop-events",
-            shop.model_dump(),
-            to=f"shop:{shop.id}",
+            "task-item-events",
+            task_item.model_dump(),
+            to=f"task_item:{task_item.id}",
         )
 
-        return shop
+        return task_item
     except Exception as e:
         log.exception(e)
         raise HTTPException(
@@ -291,35 +298,35 @@ async def update_shop_by_id_or_url(
 
 
 ############################
-# DeleteShopById
+# DeleteTaskItemById
 ############################
 
 
-@router.delete("/{identifier}/delete", response_model=bool)
-async def delete_shop_by_id_or_url(
+@router.delete("/{id}/delete", response_model=bool)
+async def delete_task_item_by_id(
     request: Request,
-    identifier: str,
+    id: str,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
     if user.role != "admin" and not has_permission(
-        user.id, "features.shops", request.app.state.config.USER_PERMISSIONS, db=db
+        user.id, "features.task_items", request.app.state.config.USER_PERMISSIONS, db=db
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,
         )
 
-    shop = Shops.get_shop_by_id_or_url(identifier, db=db)
-    if not shop:
+    task_item = TaskItems.get_task_item_by_id(id, db=db)
+    if not task_item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
 
     if user.role != "admin" and (
-        user.id != shop.user_id
+        user.id != task_item.user_id
         and not has_access(
-            user.id, type="write", access_control=shop.access_control, db=db
+            user.id, type="write", access_control=task_item.access_control, db=db
         )
     ):
         raise HTTPException(
@@ -327,78 +334,10 @@ async def delete_shop_by_id_or_url(
         )
 
     try:
-        shop = Shops.delete_shop_by_id(shop.id, db=db)
+        task_item = TaskItems.delete_task_item_by_id(id, db=db)
         return True
     except Exception as e:
         log.exception(e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()
         )
-
-
-############################
-# Public Shop Endpoints (No Authentication Required)
-############################
-
-
-@router.get("/public/{identifier}", response_model=Optional[ShopModel])
-async def get_public_shop_by_id_or_url(
-    request: Request,
-    identifier: str,
-    db: Session = Depends(get_session),
-):
-    """
-    Public endpoint to get a shop by ID or URL slug.
-    Only returns shops that are public (access_control is None).
-    """
-    shop = Shops.get_shop_by_id_or_url(identifier, db=db)
-    if not shop:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
-        )
-
-    # Only return public shops (access_control is None)
-    if shop.access_control is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
-        )
-
-    return shop
-
-
-@router.get("/public/search", response_model=ShopListResponse)
-async def search_public_shops(
-    request: Request,
-    query: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
-    page: Optional[int] = 1,
-    db: Session = Depends(get_session),
-):
-    """
-    Public endpoint to search for public shops.
-    Only returns shops that are public (access_control is None).
-    """
-    limit = None
-    skip = None
-    if page is not None:
-        limit = 60
-        skip = (page - 1) * limit
-
-    filter = {}
-    if query:
-        filter["query"] = query
-    if order_by:
-        filter["order_by"] = order_by
-    if direction:
-        filter["direction"] = direction
-
-    # Only show public shops (access_control is None)
-    # We'll use a dummy user_id and let the search filter handle public access
-    filter["user_id"] = None  # This will be handled specially in search_shops
-    filter["permission"] = "read"
-
-    # Get all public shops (user_id=None means public access only)
-    result = Shops.search_shops(None, filter, skip=skip, limit=limit, db=db)
-    
-    return result
