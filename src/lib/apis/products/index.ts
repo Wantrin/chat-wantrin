@@ -8,6 +8,7 @@ type ProductItem = {
 	image_urls?: string[] | null;
 	stock?: number;
 	category?: string | null;
+	currency?: string | null;
 	shop_id?: string | null;
 	meta?: null | object;
 	access_control?: null | object;
@@ -89,7 +90,8 @@ export const searchProducts = async (
 	permission: string | null = null,
 	orderBy: string | null = null,
 	direction: string | null = null,
-	page: number | null = null
+	page: number | null = null,
+	currency: string | null = null
 ) => {
 	let error = null;
 	const searchParams = new URLSearchParams();
@@ -100,6 +102,10 @@ export const searchProducts = async (
 
 	if (category !== null) {
 		searchParams.append('category', category);
+	}
+
+	if (currency !== null) {
+		searchParams.append('currency', currency);
 	}
 
 	if (shopId !== null) {

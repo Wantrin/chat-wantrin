@@ -36,6 +36,7 @@ class Product(Base):
     image_urls = Column(JSON, nullable=True)
     stock = Column(BigInteger, default=0)
     category = Column(Text, nullable=True)
+    currency = Column(Text, nullable=True)
     meta = Column(JSON, nullable=True)
 
     access_control = Column(JSON, nullable=True)
@@ -58,6 +59,7 @@ class ProductModel(BaseModel):
     image_urls: list[str] = []
     stock: int = 0
     category: Optional[str] = None
+    currency: Optional[str] = None
     meta: Optional[dict] = None
 
     access_control: Optional[dict] = None
@@ -79,6 +81,7 @@ class ProductForm(BaseModel):
     image_urls: Optional[list[str]] = None
     stock: int = 0
     category: Optional[str] = None
+    currency: Optional[str] = None
     shop_id: str
     meta: Optional[dict] = None
     access_control: Optional[dict] = None
@@ -92,6 +95,7 @@ class ProductUpdateForm(BaseModel):
     image_urls: Optional[list[str]] = None
     stock: Optional[int] = None
     category: Optional[str] = None
+    currency: Optional[str] = None
     shop_id: Optional[str] = None  # Peut être modifié mais doit toujours avoir une valeur
     meta: Optional[dict] = None
     access_control: Optional[dict] = None
@@ -235,6 +239,15 @@ class ProductTable:
                 if category:
                     query = query.filter(Product.category == category)
 
+                currency = filter.get("currency")
+                if currency:
+                    try:
+                        query = query.filter(Product.currency == currency)
+                    except Exception:
+                        # Column might not exist yet if migration hasn't been run
+                        # In this case, we'll just skip the currency filter
+                        pass
+
                 shop_id = filter.get("shop_id")
                 if shop_id:
                     query = query.filter(Product.shop_id == shop_id)
@@ -301,9 +314,32 @@ class ProductTable:
 
             products = []
             for product, user in items:
+                try:
+                    product_model = ProductModel.model_validate(product)
+                except Exception:
+                    # If currency column doesn't exist yet, create a dict without it
+                    product_dict = {
+                        "id": product.id,
+                        "user_id": product.user_id,
+                        "shop_id": product.shop_id,
+                        "name": product.name,
+                        "description": product.description,
+                        "price": product.price,
+                        "image_url": product.image_url,
+                        "image_urls": product.image_urls or [],
+                        "stock": product.stock or 0,
+                        "category": product.category,
+                        "currency": getattr(product, 'currency', None),  # Safe access
+                        "meta": product.meta,
+                        "access_control": product.access_control,
+                        "created_at": product.created_at,
+                        "updated_at": product.updated_at,
+                    }
+                    product_model = ProductModel(**product_dict)
+                
                 products.append(
                     ProductUserResponse(
-                        **ProductModel.model_validate(product).model_dump(),
+                        **product_model.model_dump(),
                         user=(
                             UserResponse(**UserModel.model_validate(user).model_dump())
                             if user
@@ -345,7 +381,30 @@ class ProductTable:
     ) -> Optional[ProductModel]:
         with get_db_context(db) as db:
             product = db.query(Product).filter(Product.id == id).first()
-            return ProductModel.model_validate(product) if product else None
+            if not product:
+                return None
+            try:
+                return ProductModel.model_validate(product)
+            except Exception as e:
+                # If currency column doesn't exist yet, create a dict without it
+                product_dict = {
+                    "id": product.id,
+                    "user_id": product.user_id,
+                    "shop_id": product.shop_id,
+                    "name": product.name,
+                    "description": product.description,
+                    "price": product.price,
+                    "image_url": product.image_url,
+                    "image_urls": product.image_urls or [],
+                    "stock": product.stock or 0,
+                    "category": product.category,
+                    "currency": getattr(product, 'currency', None),  # Safe access
+                    "meta": product.meta,
+                    "access_control": product.access_control,
+                    "created_at": product.created_at,
+                    "updated_at": product.updated_at,
+                }
+                return ProductModel(**product_dict)
 
     def update_product_by_id(
         self, id: str, form_data: ProductUpdateForm, db: Optional[Session] = None
@@ -372,6 +431,8 @@ class ProductTable:
                 product.stock = form_data["stock"]
             if "category" in form_data:
                 product.category = form_data["category"]
+            if "currency" in form_data:
+                product.currency = form_data["currency"]
             if "shop_id" in form_data:
                 product.shop_id = form_data["shop_id"]
             if "meta" in form_data:

@@ -7,7 +7,13 @@
 		i18n = getContext('i18n');
 	} catch (e) {
 		console.error('i18n context is not available in Products component:', e);
-		i18n = null;
+		// Create a dummy store-like object to prevent errors
+		i18n = {
+			subscribe: (fn) => {
+				fn({ t: (key) => key });
+				return () => {};
+			}
+		};
 	}
 
 	import { goto } from '$app/navigation';
@@ -37,6 +43,7 @@
 
 	let query = '';
 	let category = '';
+	let currency = '';
 
 	let sortKey = null;
 
@@ -92,7 +99,8 @@
 				null,
 				sortKey || null,
 				null,
-				page
+				page,
+				currency || null
 			);
 
 			console.log('Products search result:', res);
@@ -142,7 +150,8 @@
 				null,
 				sortKey || null,
 				null,
-				page
+				page,
+				currency || null
 			);
 
 			if (res && res.items) {
@@ -162,7 +171,7 @@
 		init();
 	}
 
-	$: if ((query !== undefined || category !== undefined || sortKey !== undefined || viewOption !== undefined) && loaded && typeof window !== 'undefined') {
+	$: if ((query !== undefined || category !== undefined || currency !== undefined || sortKey !== undefined || viewOption !== undefined) && loaded && typeof window !== 'undefined') {
 		init();
 	}
 
@@ -173,43 +182,73 @@
 	});
 </script>
 
-<div class="flex flex-col h-full w-full">
-	<div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
-		<div class="flex items-center gap-2 flex-1">
-			<div class="relative flex-1 max-w-md">
-				<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+<div class="flex flex-col h-full w-full bg-gradient-to-br from-blue-50 via-orange-50 to-blue-50 dark:from-gray-900 dark:via-orange-900/20 dark:to-gray-800">
+	<div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm gap-4">
+		<div class="flex items-center gap-3 flex-1 flex-wrap">
+			<div class="relative flex-1 max-w-md min-w-[200px]">
 				<input
 					type="text"
-					placeholder={$i18n.t('Search products...')}
-					class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+					placeholder={$i18n ? $i18n.t('Search products...') : 'Search products...'}
+					class="w-full pl-12 pr-4 py-3 h-[48px] border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 transition-all shadow-sm hover:shadow-md"
 					bind:value={query}
 				/>
+				<div class="absolute left-4 top-1/2 transform -translate-y-1/2 pointer-events-none z-10">
+					<Search class="w-5 h-5 text-gray-400 dark:text-gray-500" />
+				</div>
 			</div>
 			<select
-				class="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+				class="px-5 py-3 h-[48px] border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 transition-all shadow-sm hover:shadow-md font-medium min-w-[150px]"
 				bind:value={category}
 			>
-				<option value="">{$i18n.t('All Categories')}</option>
-				<option value="electronics">{$i18n.t('Electronics')}</option>
-				<option value="clothing">{$i18n.t('Clothing')}</option>
-				<option value="food">{$i18n.t('Food')}</option>
-				<option value="books">{$i18n.t('Books')}</option>
-				<option value="other">{$i18n.t('Other')}</option>
+				<option value="">{$i18n ? $i18n.t('All Categories') : 'All Categories'}</option>
+				<option value="electronics">{$i18n ? $i18n.t('Electronics') : 'Electronics'}</option>
+				<option value="clothing">{$i18n ? $i18n.t('Clothing') : 'Clothing'}</option>
+				<option value="food">{$i18n ? $i18n.t('Food') : 'Food'}</option>
+				<option value="books">{$i18n ? $i18n.t('Books') : 'Books'}</option>
+				<option value="other">{$i18n ? $i18n.t('Other') : 'Other'}</option>
 			</select>
 			<select
-				class="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+				class="px-5 py-3 h-[48px] border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 transition-all shadow-sm hover:shadow-md font-medium min-w-[150px]"
+				bind:value={currency}
+			>
+				<option value="">{$i18n ? $i18n.t('All Currencies') : 'All Currencies'}</option>
+				<option value="EUR">EUR (€)</option>
+				<option value="USD">USD ($)</option>
+				<option value="GBP">GBP (£)</option>
+				<option value="JPY">JPY (¥)</option>
+				<option value="CNY">CNY (¥)</option>
+				<option value="INR">INR (₹)</option>
+				<option value="CAD">CAD ($)</option>
+				<option value="AUD">AUD ($)</option>
+				<option value="CHF">CHF (Fr)</option>
+				<option value="SEK">SEK (kr)</option>
+				<option value="NOK">NOK (kr)</option>
+				<option value="DKK">DKK (kr)</option>
+				<option value="PLN">PLN (zł)</option>
+				<option value="RUB">RUB (₽)</option>
+				<option value="BRL">BRL (R$)</option>
+				<option value="MXN">MXN ($)</option>
+				<option value="ZAR">ZAR (R)</option>
+				<option value="KRW">KRW (₩)</option>
+				<option value="SGD">SGD ($)</option>
+				<option value="HKD">HKD ($)</option>
+				<option value="NZD">NZD ($)</option>
+				<option value="XOF">XOF (CFA)</option>
+			</select>
+			<select
+				class="px-5 py-3 h-[48px] border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 transition-all shadow-sm hover:shadow-md font-medium min-w-[150px]"
 				bind:value={sortKey}
 			>
-				<option value="">{$i18n.t('Sort by')}</option>
-				<option value="name">{$i18n.t('Name')}</option>
-				<option value="price">{$i18n.t('Price')}</option>
-				<option value="updated_at">{$i18n.t('Recently Updated')}</option>
+				<option value="">{$i18n ? $i18n.t('Sort by') : 'Sort by'}</option>
+				<option value="name">{$i18n ? $i18n.t('Name') : 'Name'}</option>
+				<option value="price">{$i18n ? $i18n.t('Price') : 'Price'}</option>
+				<option value="updated_at">{$i18n ? $i18n.t('Recently Updated') : 'Recently Updated'}</option>
 			</select>
 		</div>
 		{#if $user && (showCreateButton || (!shopId && viewOption === null))}
-			<Tooltip content={$i18n.t('Add Product')}>
+			<Tooltip content={$i18n ? $i18n.t('Add Product') : 'Add Product'}>
 				<button
-					class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+					class="flex items-center justify-center gap-2 px-6 h-[48px] bg-gradient-to-r from-blue-600 to-orange-600 hover:from-blue-700 hover:to-orange-700 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5 whitespace-nowrap"
 					on:click={() => {
 						if (shopId) {
 							goto(`/shops/${shopId}/products/create`);
@@ -219,19 +258,19 @@
 					}}
 				>
 					<Plus class="w-5 h-5" />
-					<span>{$i18n.t('Add Product')}</span>
+					<span>{$i18n ? $i18n.t('Add Product') : 'Add Product'}</span>
 				</button>
 			</Tooltip>
 		{/if}
 	</div>
 
-	<div class="flex-1 overflow-y-auto p-4">
+	<div class="flex-1 overflow-y-auto p-6">
 		{#if itemsLoading && items === null}
 			<div class="flex items-center justify-center h-full">
 				<Loader />
 			</div>
 		{:else if items && items.length > 0}
-			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
 				{#each items as item (item.id)}
 					<ProductCard
 						{item}
@@ -243,31 +282,36 @@
 				{/each}
 			</div>
 			{#if !allItemsLoaded}
-				<div class="flex justify-center mt-4">
+				<div class="flex justify-center mt-8">
 					<button
-						class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+						class="px-6 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 shadow-md hover:shadow-lg font-medium border-2 border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-600"
 						on:click={loadMore}
 						disabled={itemsLoading}
 					>
 						{#if itemsLoading}
 							<Spinner class="w-4 h-4" />
 						{:else}
-							{$i18n.t('Load More')}
+							{$i18n ? $i18n.t('Load More') : 'Load More'}
 						{/if}
 					</button>
 				</div>
 			{/if}
 		{:else if items && items.length === 0}
-			<div class="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
-				<p class="text-lg">{$i18n.t('No products found')}</p>
+			<div class="flex flex-col items-center justify-center h-full">
+				<div class="text-center p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700">
+					<svg class="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+					</svg>
+					<p class="text-xl font-semibold text-gray-600 dark:text-gray-400">{$i18n ? $i18n.t('No products found') : 'No products found'}</p>
+				</div>
 			</div>
 		{/if}
 	</div>
 
 	<DeleteConfirmDialog
 		open={showDeleteConfirm}
-		title={$i18n.t('Delete Product')}
-		message={$i18n.t('Are you sure you want to delete this product?')}
+		title={$i18n ? $i18n.t('Delete Product') : 'Delete Product'}
+		message={$i18n ? $i18n.t('Are you sure you want to delete this product?') : 'Are you sure you want to delete this product?'}
 		on:confirm={() => {
 			if (selectedProduct) {
 				deleteProductHandler(selectedProduct.id);

@@ -97,6 +97,7 @@ async def search_products(
     request: Request,
     query: Optional[str] = None,
     category: Optional[str] = None,
+    currency: Optional[str] = None,
     shop_id: Optional[str] = None,
     view_option: Optional[str] = None,
     permission: Optional[str] = None,
@@ -125,6 +126,8 @@ async def search_products(
         filter["query"] = query
     if category:
         filter["category"] = category
+    if currency:
+        filter["currency"] = currency
     if shop_id:
         filter["shop_id"] = shop_id
     if view_option:

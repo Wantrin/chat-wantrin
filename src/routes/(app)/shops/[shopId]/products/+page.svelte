@@ -1,10 +1,17 @@
 <script>
 	import { getContext, onMount } from 'svelte';
 
-	const i18n = getContext('i18n');
+	let i18n;
+	try {
+		i18n = getContext('i18n');
+	} catch (e) {
+		console.error('i18n context is not available in shop products page:', e);
+		i18n = null;
+	}
 
 	import { mobile, showSidebar, user } from '$lib/stores';
-	import { goto, page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 
 	import UserMenu from '$lib/components/layout/Sidebar/UserMenu.svelte';
 	import Products from '$lib/components/products/Products.svelte';
@@ -15,7 +22,9 @@
 	let loaded = false;
 
 	onMount(() => {
-		loaded = true;
+		if (typeof window !== 'undefined') {
+			loaded = true;
+		}
 	});
 </script>
 
@@ -30,7 +39,7 @@
 				{#if $mobile}
 					<div class="{$showSidebar ? 'md:hidden' : ''} flex flex-none items-center">
 						<Tooltip
-							content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
+							content={$i18n ? ($showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')) : ($showSidebar ? 'Close Sidebar' : 'Open Sidebar')}
 							interactive={true}
 						>
 							<button
@@ -54,7 +63,7 @@
 							class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium bg-transparent py-1 touch-auto pointer-events-auto"
 						>
 							<a class="min-w-fit transition" href="/shops/{$page.params.shopId}/products">
-								{$i18n.t('Products')}
+								{$i18n ? $i18n.t('Products') : 'Products'}
 							</a>
 						</div>
 					</div>

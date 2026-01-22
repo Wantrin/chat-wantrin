@@ -129,20 +129,22 @@
 	});
 </script>
 
-<div class="flex flex-col h-full w-full">
-	<div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
-		<div class="flex items-center gap-2 flex-1">
+<div class="flex flex-col h-full w-full bg-gradient-to-br from-blue-50 via-orange-50 to-blue-50 dark:from-gray-900 dark:via-orange-900/20 dark:to-gray-800">
+	<div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm gap-4">
+		<div class="flex items-center gap-3 flex-1">
 			<div class="relative flex-1 max-w-md">
-				<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
 				<input
 					type="text"
 					placeholder={$i18n.t('Search shops...')}
-					class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+					class="w-full pl-12 pr-4 py-3 h-[48px] border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 transition-all shadow-sm hover:shadow-md"
 					bind:value={query}
 				/>
+				<div class="absolute left-4 top-1/2 transform -translate-y-1/2 pointer-events-none z-10">
+					<Search class="w-5 h-5 text-gray-400 dark:text-gray-500" />
+				</div>
 			</div>
 			<select
-				class="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+				class="px-5 py-3 h-[48px] border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 transition-all shadow-sm hover:shadow-md font-medium min-w-[150px]"
 				bind:value={sortKey}
 			>
 				<option value="">{$i18n.t('Sort by')}</option>
@@ -153,7 +155,7 @@
 		{#if $user}
 			<Tooltip content={$i18n.t('Add Shop')}>
 				<button
-					class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+					class="flex items-center justify-center gap-2 px-6 h-[48px] bg-gradient-to-r from-blue-600 to-orange-600 hover:from-blue-700 hover:to-orange-700 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5 whitespace-nowrap"
 					on:click={() => goto('/auth-shops/create')}
 				>
 					<Plus class="w-5 h-5" />
@@ -163,13 +165,13 @@
 		{/if}
 	</div>
 
-	<div class="flex-1 overflow-y-auto p-4">
+	<div class="flex-1 overflow-y-auto p-6">
 		{#if itemsLoading && items === null}
 			<div class="flex items-center justify-center h-full">
 				<Loader />
 			</div>
 		{:else if items && items.length > 0}
-			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
 				{#each items as item (item.id)}
 					<ShopCard
 						{item}
@@ -181,9 +183,9 @@
 				{/each}
 			</div>
 			{#if !allItemsLoaded}
-				<div class="flex justify-center mt-4">
+				<div class="flex justify-center mt-8">
 					<button
-						class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+						class="px-6 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 shadow-md hover:shadow-lg font-medium border-2 border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-600"
 						on:click={loadMore}
 						disabled={itemsLoading}
 					>
@@ -196,8 +198,13 @@
 				</div>
 			{/if}
 		{:else if items && items.length === 0}
-			<div class="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
-				<p class="text-lg">{$i18n.t('No shops found')}</p>
+			<div class="flex flex-col items-center justify-center h-full">
+				<div class="text-center p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700">
+					<svg class="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+					</svg>
+					<p class="text-xl font-semibold text-gray-600 dark:text-gray-400">{$i18n.t('No shops found')}</p>
+				</div>
 			</div>
 		{/if}
 	</div>

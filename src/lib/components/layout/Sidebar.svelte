@@ -651,22 +651,20 @@
 		class=" pt-[7px] pb-2 px-2 flex flex-col justify-between text-black dark:text-white hover:bg-gray-50/30 dark:hover:bg-gray-950/30 h-full z-10 transition-all border-e-[0.5px] border-gray-50 dark:border-gray-850/30"
 		id="sidebar"
 	>
-		<button
-			class="flex flex-col flex-1 {isWindows ? 'cursor-pointer' : 'cursor-[e-resize]'}"
-			on:click={async () => {
-				showSidebar.set(!$showSidebar);
-			}}
-		>
+		<div class="flex flex-col gap-1 flex-1">
 			<div class="pb-1.5">
 				<Tooltip
 					content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
 					placement="right"
 				>
 					<button
-						class="flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group {isWindows
+						class="flex rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-300 group {isWindows
 							? 'cursor-pointer'
-							: 'cursor-[e-resize]'}"
+							: 'cursor-[e-resize]'} w-full justify-center shadow-sm hover:shadow-md border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
 						aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
+						on:click={async () => {
+							showSidebar.set(!$showSidebar);
+						}}
 					>
 						<div class=" self-center flex items-center justify-center size-9">
 							<img
@@ -675,12 +673,189 @@
 								alt=""
 							/>
 
-							<Sidebar className="size-5 hidden group-hover:flex" />
+							<Sidebar className="size-5 hidden group-hover:flex text-blue-600 dark:text-blue-400" />
 						</div>
 					</button>
 				</Tooltip>
 			</div>
-		</button>
+
+			<Tooltip content={$i18n.t('New Chat')} placement="right">
+				<a
+					class="flex rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-300 w-full justify-center py-2.5 shadow-sm hover:shadow-md border border-transparent hover:border-blue-200 dark:hover:border-blue-800 group"
+					href="/"
+					draggable="false"
+					on:click={newChatHandler}
+					aria-label={$i18n.t('New Chat')}
+				>
+					<div class="self-center text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+						<PencilSquare className=" size-4.5" strokeWidth="2" />
+					</div>
+				</a>
+			</Tooltip>
+
+			<Tooltip content={$i18n.t('Search')} placement="right">
+				<button
+					class="flex rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-300 w-full justify-center py-2.5 shadow-sm hover:shadow-md border border-transparent hover:border-blue-200 dark:hover:border-blue-800 group"
+					on:click={() => {
+						showSearch.set(true);
+					}}
+					draggable="false"
+					aria-label={$i18n.t('Search')}
+				>
+					<div class="self-center text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+						<Search strokeWidth="2" className="size-4.5" />
+					</div>
+				</button>
+			</Tooltip>
+
+			{#if ($config?.features?.enable_notes ?? false) && ($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))}
+				<Tooltip content={$i18n.t('Notes')} placement="right">
+					<a
+						class="flex rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-300 w-full justify-center py-2.5 shadow-sm hover:shadow-md border border-transparent hover:border-blue-200 dark:hover:border-blue-800 group"
+						href="/notes"
+						on:click={itemClickHandler}
+						draggable="false"
+						aria-label={$i18n.t('Notes')}
+					>
+						<div class="self-center text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+							<Note className="size-4.5" strokeWidth="2" />
+						</div>
+					</a>
+				</Tooltip>
+			{/if}
+
+			{#if $user?.role === 'admin' || ($user?.permissions?.features?.products ?? true)}
+				<Tooltip content={$i18n.t('Shop')} placement="right">
+					<a
+						class="flex rounded-xl hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all duration-300 w-full justify-center py-2.5 shadow-sm hover:shadow-md border border-transparent hover:border-orange-200 dark:hover:border-orange-800 group"
+						href="/shops"
+						on:click={itemClickHandler}
+						draggable="false"
+						aria-label={$i18n.t('Shop')}
+					>
+						<div class="self-center text-gray-700 dark:text-gray-300 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke-width="2"
+								stroke="currentColor"
+								class="size-4.5"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+								/>
+							</svg>
+						</div>
+					</a>
+				</Tooltip>
+			{/if}
+
+			{#if $user?.role === 'admin' || ($user?.permissions?.features?.products ?? true)}
+				<Tooltip content={$i18n.t('Products')} placement="right">
+					<a
+						class="flex rounded-xl hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all duration-300 w-full justify-center py-2.5 shadow-sm hover:shadow-md border border-transparent hover:border-orange-200 dark:hover:border-orange-800 group"
+						href="/products"
+						on:click={itemClickHandler}
+						draggable="false"
+						aria-label={$i18n.t('Products')}
+					>
+						<div class="self-center text-gray-700 dark:text-gray-300 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke-width="2"
+								stroke="currentColor"
+								class="size-4.5"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"
+								/>
+							</svg>
+						</div>
+					</a>
+				</Tooltip>
+			{/if}
+
+			{#if $user?.role === 'admin' || $user?.permissions?.workspace?.models || $user?.permissions?.workspace?.knowledge || $user?.permissions?.workspace?.prompts || $user?.permissions?.workspace?.tools}
+				<Tooltip content={$i18n.t('Workspace')} placement="right">
+					<a
+						class="flex rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-300 w-full justify-center py-2.5 shadow-sm hover:shadow-md border border-transparent hover:border-blue-200 dark:hover:border-blue-800 group"
+						href="/workspace"
+						on:click={itemClickHandler}
+						draggable="false"
+						aria-label={$i18n.t('Workspace')}
+					>
+						<div class="self-center text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke-width="2"
+								stroke="currentColor"
+								class="size-4.5"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z"
+								/>
+							</svg>
+						</div>
+					</a>
+				</Tooltip>
+			{/if}
+		</div>
+
+		<div class="pt-1.5">
+			{#if $user !== undefined && $user !== null}
+				<Tooltip content={$user?.name || $i18n.t('User Menu')} placement="right">
+					<UserMenu
+						role={$user?.role}
+						profile={$config?.features?.enable_user_status ?? true}
+						showActiveUsers={false}
+						on:show={(e) => {
+							if (e.detail === 'archived-chat') {
+								showArchivedChats.set(true);
+							}
+						}}
+					>
+						<div
+							class=" flex items-center rounded-2xl py-2 px-1.5 w-full hover:bg-gradient-to-r hover:from-blue-50 hover:to-orange-50 dark:hover:from-blue-900/20 dark:hover:to-orange-900/20 transition-all duration-300 justify-center shadow-sm hover:shadow-md border border-transparent hover:border-blue-200 dark:hover:border-blue-800 group"
+						>
+							<div class=" self-center relative">
+								<img
+									src={`${WEBUI_API_BASE_URL}/users/${$user?.id}/profile/image`}
+									class=" size-7 object-cover rounded-full ring-2 ring-transparent group-hover:ring-blue-300 dark:group-hover:ring-blue-700 transition-all"
+									alt={$i18n.t('Open User Profile Menu')}
+									aria-label={$i18n.t('Open User Profile Menu')}
+								/>
+
+								{#if $config?.features?.enable_user_status}
+									<div class="absolute -bottom-0.5 -right-0.5">
+										<span class="relative flex size-2.5">
+											<span
+												class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"
+											></span>
+											<span
+												class="relative inline-flex size-2.5 rounded-full {true
+													? 'bg-green-500'
+													: 'bg-gray-300 dark:bg-gray-700'} border-2 border-white dark:border-gray-900"
+											></span>
+										</span>
+									</div>
+								{/if}
+							</div>
+						</div>
+					</UserMenu>
+				</Tooltip>
+			{/if}
+		</div>
 	</div>
 {/if}
 
