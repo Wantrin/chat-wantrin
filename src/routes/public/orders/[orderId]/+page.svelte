@@ -149,14 +149,85 @@
 					</span>
 				</div>
 
-				{#if shop}
-					<div class="mb-6">
-						<h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-							{$i18n ? $i18n.t('Shop') : 'Shop'}
-						</h3>
-						<p class="text-gray-900 dark:text-gray-100">{shop.name}</p>
+			{#if shop}
+				<div class="mb-6">
+					<h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+						{$i18n ? $i18n.t('Shop') : 'Shop'}
+					</h3>
+					<p class="text-gray-900 dark:text-gray-100">{shop.name}</p>
+				</div>
+			{/if}
+
+			<!-- Delivery Tracking Widget -->
+			{#if order.status === 'shipped' || order.status === 'delivered' || order.tracking_number}
+				<div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg shadow-md p-6 mb-6 border border-blue-200 dark:border-blue-800">
+					<h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+						<svg
+							class="w-5 h-5 text-blue-600 dark:text-blue-400"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="1.5"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"
+							/>
+						</svg>
+						{$i18n ? $i18n.t('Track Your Order') : 'Track Your Order'}
+					</h3>
+					<div class="space-y-3">
+						{#if order.tracking_number}
+							<div>
+								<strong class="text-gray-900 dark:text-gray-100">{$i18n ? $i18n.t('Tracking Number') : 'Tracking Number'}:</strong>
+								<span class="ml-2 text-gray-700 dark:text-gray-300 font-mono text-lg">{order.tracking_number}</span>
+							</div>
+						{/if}
+						{#if order.carrier}
+							<div>
+								<strong class="text-gray-900 dark:text-gray-100">{$i18n ? $i18n.t('Carrier') : 'Carrier'}:</strong>
+								<span class="ml-2 text-gray-700 dark:text-gray-300">{order.carrier}</span>
+							</div>
+						{/if}
+						{#if order.tracking_url}
+							<a
+								href={order.tracking_url}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+							>
+								<svg
+									class="w-4 h-4"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+									/>
+								</svg>
+								{$i18n ? $i18n.t('Track Package') : 'Track Package'}
+							</a>
+						{/if}
+						{#if order.estimated_delivery_date}
+							<div class="pt-2 border-t border-blue-200 dark:border-blue-800">
+								<strong class="text-gray-900 dark:text-gray-100">{$i18n ? $i18n.t('Estimated Delivery') : 'Estimated Delivery'}:</strong>
+								<span class="ml-2 text-gray-700 dark:text-gray-300">{formatDate(order.estimated_delivery_date)}</span>
+							</div>
+						{/if}
+						{#if order.delivered_at}
+							<div class="pt-2 border-t border-blue-200 dark:border-blue-800">
+								<strong class="text-green-700 dark:text-green-400">{$i18n ? $i18n.t('Delivered On') : 'Delivered On'}:</strong>
+								<span class="ml-2 text-gray-700 dark:text-gray-300">{formatDate(order.delivered_at)}</span>
+							</div>
+						{/if}
 					</div>
-				{/if}
+				</div>
+			{/if}
 			</div>
 
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -241,7 +312,15 @@
 				</div>
 			{/if}
 
-			<div class="text-center">
+			<div class="text-center space-x-4">
+				{#if order.status === 'shipped' || order.status === 'delivered' || order.tracking_number}
+					<a
+						href="/public/track/{order.id}"
+						class="inline-block px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold"
+					>
+						{$i18n ? $i18n.t('Track Order') : 'Track Order'}
+					</a>
+				{/if}
 				<a
 					href="/public/shops"
 					class="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"

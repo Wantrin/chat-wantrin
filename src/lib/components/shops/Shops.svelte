@@ -35,10 +35,34 @@
 
 	let itemsLoading = false;
 	let allItemsLoaded = false;
+	
+	// Track recent error messages to prevent duplicates
+	const recentErrors = new Set<string>();
+	const clearErrorAfter = (errorKey: string, delay: number = 2000) => {
+		setTimeout(() => {
+			recentErrors.delete(errorKey);
+		}, delay);
+	};
+
+	const showErrorOnce = (error: any) => {
+		const errorMessage = `${error}`;
+		const errorKey = errorMessage.substring(0, 50); // Use first 50 chars as key
+		
+		// Only show error if we haven't shown it recently
+		if (!recentErrors.has(errorKey)) {
+			recentErrors.add(errorKey);
+			clearErrorAfter(errorKey);
+			
+			// Only show error if it's not a 401 (unauthorized) - those are handled by auth flow
+			if (!errorMessage.includes('401') && !errorMessage.includes('Unauthorized')) {
+				toast.error(errorMessage);
+			}
+		}
+	};
 
 	const deleteShopHandler = async (id) => {
 		const res = await deleteShopById(localStorage.token, id).catch((error) => {
-			toast.error(`${error}`);
+			showErrorOnce(error);
 			return null;
 		});
 
@@ -55,6 +79,11 @@
 	};
 
 	const init = async () => {
+		// Prevent multiple simultaneous calls
+		if (itemsLoading) {
+			return;
+		}
+		
 		itemsLoading = true;
 		reset();
 
@@ -78,7 +107,7 @@
 				}
 			}
 		} catch (error) {
-			toast.error(`${error}`);
+			showErrorOnce(error);
 		} finally {
 			itemsLoading = false;
 		}
@@ -108,20 +137,24 @@
 				}
 			}
 		} catch (error) {
-			toast.error(`${error}`);
+			showErrorOnce(error);
 		} finally {
 			itemsLoading = false;
 		}
 	};
 
-	$: if (loaded) {
-		init();
-	}
+	let initTimeout: ReturnType<typeof setTimeout> | null = null;
 
-	$: if (query !== undefined || sortKey !== undefined || viewOption !== undefined) {
-		if (loaded) {
-			init();
+	// Unified reactive statement to prevent duplicate calls
+	// Watch all relevant variables to trigger init when any change
+	$: if (loaded && (query !== undefined || sortKey !== undefined || viewOption !== undefined)) {
+		// Debounce init calls to prevent duplicate API requests
+		if (initTimeout) {
+			clearTimeout(initTimeout);
 		}
+		initTimeout = setTimeout(() => {
+			init();
+		}, 150);
 	}
 
 	onMount(() => {

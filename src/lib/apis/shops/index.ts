@@ -4,7 +4,9 @@ type ShopItem = {
 	name: string;
 	description?: string | null;
 	image_url?: string | null;
+	url?: string | null;
 	meta?: null | object;
+	is_public?: boolean | null;
 	access_control?: null | object;
 };
 

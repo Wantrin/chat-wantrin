@@ -62,12 +62,10 @@ export const uploadFile = async (
 
 					for (const line of lines) {
 						if (line !== '') {
-							console.log(line);
 							if (line === 'data: [DONE]') {
-								console.log(line);
+								// Stream completed
 							} else {
 								let data = JSON.parse(line.replace(/^data: /, ''));
-								console.log(data);
 
 								if (data?.error) {
 									console.error(data.error);
@@ -81,7 +79,7 @@ export const uploadFile = async (
 						}
 					}
 				} catch (error) {
-					console.log(error);
+					// Error handled silently
 				}
 			}
 		}

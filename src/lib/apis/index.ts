@@ -334,7 +334,6 @@ export const getToolServerData = async (token: string, url: string) => {
 		throw error;
 	}
 
-	console.log(res);
 	return res;
 };
 
@@ -1355,7 +1354,8 @@ export const getUsage = async (token: string = '') => {
 export const getBackendConfig = async () => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_BASE_URL}/api/config`, {
+	// Try with credentials first (for normal browsing)
+	let res = await fetch(`${WEBUI_BASE_URL}/api/config`, {
 		method: 'GET',
 		credentials: 'include',
 		headers: {
@@ -1367,12 +1367,33 @@ export const getBackendConfig = async () => {
 			return res.json();
 		})
 		.catch((err) => {
-			console.error(err);
+			console.error('Error with credentials:', err);
 			error = err;
 			return null;
 		});
 
-	if (error) {
+	// If that failed, try without credentials (for private browsing where cookies might be blocked)
+	if (!res && error) {
+		console.log('Retrying without credentials for private browsing compatibility...');
+		res = await fetch(`${WEBUI_BASE_URL}/api/config`, {
+			method: 'GET',
+			credentials: 'omit',
+			headers: {
+				'Content-Type': 'application/json'
+			}
+		})
+			.then(async (res) => {
+				if (!res.ok) throw await res.json();
+				return res.json();
+			})
+			.catch((err) => {
+				console.error('Error without credentials:', err);
+				error = err;
+				return null;
+			});
+	}
+
+	if (error && !res) {
 		throw error;
 	}
 

@@ -68,23 +68,53 @@
 	const loadData = async () => {
 		loading = true;
 		try {
-			const shopId = $page.params.shopId;
+			const shopId = $page.params.shopId?.trim();
+			if (!shopId) {
+				toast.error($i18n ? $i18n.t('Invalid shop ID') : 'Invalid shop ID');
+				goto('/shops');
+				return;
+			}
 			const token = typeof window !== 'undefined' ? localStorage.token : '';
 
-			const [shopRes, ordersRes] = await Promise.all([
-				getShopById(token, shopId),
-				getOrdersByShopId(token, shopId)
-			]);
+			// First, try to load the shop
+			try {
+				const shopRes = await getShopById(token, shopId);
+				if (shopRes) {
+					shop = shopRes;
+				} else {
+					toast.error($i18n ? $i18n.t('Shop not found') : 'Shop not found');
+					goto('/shops');
+					return;
+				}
+			} catch (shopError: any) {
+				console.error('Error loading shop:', shopError);
+				const errorMsg = shopError?.detail || shopError?.message || shopError || 'Shop not found';
+				toast.error(errorMsg);
+				goto('/shops');
+				return;
+			}
 
-			if (shopRes) {
-				shop = shopRes;
+			// Then, try to load orders
+			try {
+				const ordersRes = await getOrdersByShopId(token, shopId);
+				if (ordersRes && Array.isArray(ordersRes)) {
+					orders = ordersRes;
+				} else {
+					orders = [];
+				}
+			} catch (ordersError: any) {
+				console.error('Error loading orders:', ordersError);
+				// Don't redirect if orders fail, just show empty list
+				const errorMsg = ordersError?.detail || ordersError?.message || ordersError;
+				if (errorMsg && errorMsg !== 'Shop not found') {
+					toast.error(errorMsg);
+				}
+				orders = [];
 			}
-			if (ordersRes) {
-				orders = ordersRes;
-			}
-		} catch (error) {
+		} catch (error: any) {
 			console.error('Error loading data:', error);
-			toast.error(`${error}`);
+			const errorMsg = error?.detail || error?.message || error || 'An error occurred';
+			toast.error(errorMsg);
 		} finally {
 			loading = false;
 		}

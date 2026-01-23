@@ -8,6 +8,7 @@
 	import { uploadFile } from '$lib/apis/files';
 	import { user } from '$lib/stores';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import ShopAccessControl from '$lib/components/shops/ShopAccessControl.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -24,6 +25,7 @@
 	let loading = false;
 	let loadingShop = true;
 	let uploadingImage = false;
+	let accessControl: any = null;
 
 	const handleImageUpload = async (event: Event) => {
 		const target = event.target as HTMLInputElement;
@@ -77,6 +79,10 @@
 			const shopId = $page.params.shopId;
 			// Always send url field, even if empty (to allow clearing it)
 			const sanitizedUrl = url ? sanitizeUrl(url) : '';
+			
+			// is_public and access_control are now independent:
+			// - is_public: controls public visibility for external clients (website)
+			// - access_control: controls internal management permissions (who can manage the shop)
 			const res = await updateShopById(localStorage.token, shopId, {
 				name,
 				description: description || null,
@@ -84,13 +90,28 @@
 				url: sanitizedUrl,  // Send empty string if cleared, not null
 				primary_color: primaryColor || null,
 				secondary_color: secondaryColor || null,
-				access_control: isPublic ? null : (shop.access_control || {})
+				is_public: isPublic,
+				access_control: accessControl !== null && accessControl !== undefined ? accessControl : null
 			});
 
 			if (res) {
 				// Update local shop data with response
 				shop = res;
 				url = res.url || '';
+				primaryColor = res.primary_color || '#3B82F6';
+				secondaryColor = res.secondary_color || '#F97316';
+				isPublic = res.is_public ?? false;
+				// Update accessControl with the response
+				if (res.access_control === null) {
+					accessControl = null;
+				} else if (res.access_control && (res.access_control.read || res.access_control.write)) {
+					accessControl = res.access_control;
+				} else {
+					accessControl = {
+						read: { group_ids: [], user_ids: [] },
+						write: { group_ids: [], user_ids: [] }
+					};
+				}
 				toast.success($i18n.t('Shop updated successfully'));
 				// Optionally redirect or stay on edit page
 				// goto(`/shops/${res.id}`);
@@ -106,6 +127,16 @@
 		if (!$user) {
 			goto('/shops');
 			return;
+		}
+
+		// Scroll to access-control section if hash is present
+		if (typeof window !== 'undefined' && window.location.hash === '#access-control') {
+			setTimeout(() => {
+				const element = document.getElementById('access-control');
+				if (element) {
+					element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+				}
+			}, 300);
 		}
 
 		try {
@@ -124,7 +155,18 @@
 				primaryColor = res.primary_color || '#3B82F6';
 				secondaryColor = res.secondary_color || '#F97316';
 				imageFileId = res.image_url || null;
-				isPublic = res.access_control === null;
+				isPublic = res.is_public ?? false;
+				// Initialize accessControl (independent from is_public)
+				if (res.access_control === null || res.access_control === undefined) {
+					accessControl = null;
+				} else if (res.access_control && (res.access_control.read || res.access_control.write)) {
+					accessControl = res.access_control;
+				} else {
+					accessControl = {
+						read: { group_ids: [], user_ids: [] },
+						write: { group_ids: [], user_ids: [] }
+					};
+				}
 				if (imageFileId && !imageFileId.startsWith('http')) {
 					imagePreview = `${WEBUI_API_BASE_URL}/files/${imageFileId}/content`;
 				} else if (imageFileId) {
@@ -238,8 +280,39 @@
 							<input
 								type="text"
 								bind:value={primaryColor}
-								pattern="^#[0-9A-Fa-f]{6}$"
 								placeholder="#3B82F6"
+								on:input={(e) => {
+									let value = e.target.value.trim();
+									// Normalize hex color: remove # if present, add it back, uppercase
+									if (value) {
+										value = value.replace(/^#/, '');
+										// Convert 3-digit hex to 6-digit
+										if (value.length === 3 && /^[0-9A-Fa-f]{3}$/.test(value)) {
+											value = value.split('').map(c => c + c).join('');
+										}
+										// Only update if it's a valid 6-digit hex
+										if (/^[0-9A-Fa-f]{6}$/.test(value)) {
+											primaryColor = '#' + value.toUpperCase();
+										} else if (/^[0-9A-Fa-f]{0,6}$/.test(value)) {
+											// Allow partial input while typing
+											primaryColor = '#' + value.toUpperCase();
+										}
+									} else {
+										primaryColor = '#3B82F6';
+									}
+								}}
+								on:blur={(e) => {
+									// Validate and normalize on blur
+									let value = e.target.value.trim().replace(/^#/, '');
+									if (value.length === 3 && /^[0-9A-Fa-f]{3}$/.test(value)) {
+										value = value.split('').map(c => c + c).join('');
+									}
+									if (/^[0-9A-Fa-f]{6}$/.test(value)) {
+										primaryColor = '#' + value.toUpperCase();
+									} else if (!primaryColor || !/^#[0-9A-Fa-f]{6}$/i.test(primaryColor)) {
+										primaryColor = '#3B82F6';
+									}
+								}}
 								class="flex-1 px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
 							/>
 						</div>
@@ -257,8 +330,39 @@
 							<input
 								type="text"
 								bind:value={secondaryColor}
-								pattern="^#[0-9A-Fa-f]{6}$"
 								placeholder="#F97316"
+								on:input={(e) => {
+									let value = e.target.value.trim();
+									// Normalize hex color: remove # if present, add it back, uppercase
+									if (value) {
+										value = value.replace(/^#/, '');
+										// Convert 3-digit hex to 6-digit
+										if (value.length === 3 && /^[0-9A-Fa-f]{3}$/.test(value)) {
+											value = value.split('').map(c => c + c).join('');
+										}
+										// Only update if it's a valid 6-digit hex
+										if (/^[0-9A-Fa-f]{6}$/.test(value)) {
+											secondaryColor = '#' + value.toUpperCase();
+										} else if (/^[0-9A-Fa-f]{0,6}$/.test(value)) {
+											// Allow partial input while typing
+											secondaryColor = '#' + value.toUpperCase();
+										}
+									} else {
+										secondaryColor = '#F97316';
+									}
+								}}
+								on:blur={(e) => {
+									// Validate and normalize on blur
+									let value = e.target.value.trim().replace(/^#/, '');
+									if (value.length === 3 && /^[0-9A-Fa-f]{3}$/.test(value)) {
+										value = value.split('').map(c => c + c).join('');
+									}
+									if (/^[0-9A-Fa-f]{6}$/.test(value)) {
+										secondaryColor = '#' + value.toUpperCase();
+									} else if (!secondaryColor || !/^#[0-9A-Fa-f]{6}$/i.test(secondaryColor)) {
+										secondaryColor = '#F97316';
+									}
+								}}
 								class="flex-1 px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
 							/>
 						</div>
@@ -307,8 +411,40 @@
 					</span>
 				</label>
 				<p class="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-8">
-					{$i18n.t('Public shops can be accessed by anyone via a shareable URL without requiring login')}
+					{$i18n.t('Public shops can be accessed by anyone via a shareable URL on the website without requiring login. This is separate from internal access control.')}
 				</p>
+			</div>
+
+			<div id="access-control" class="mt-6">
+				<div class="border-t border-gray-200 dark:border-gray-700 pt-6">
+					<div class="block text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
+						{$i18n.t('Internal Access Control')} <span class="text-gray-400 text-xs">({$i18n.t('optional')})</span>
+					</div>
+					<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+						{$i18n.t('Assign specific users and groups with read or write permissions for internal shop management. This controls who can manage the shop internally, separate from public visibility.')}
+					</p>
+					{#if accessControl !== null}
+						<ShopAccessControl
+							bind:accessControl
+							onChange={(ac) => {
+								accessControl = ac;
+							}}
+						/>
+					{:else}
+						<button
+							type="button"
+							on:click={() => {
+								accessControl = {
+									read: { group_ids: [], user_ids: [] },
+									write: { group_ids: [], user_ids: [] }
+								};
+							}}
+							class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+						>
+							{$i18n.t('Enable Access Control')}
+						</button>
+					{/if}
+				</div>
 			</div>
 
 				<div class="flex gap-4 pt-4">

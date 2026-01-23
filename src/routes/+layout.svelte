@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { io } from 'socket.io-client';
 	import { spring } from 'svelte/motion';
 	import PyodideWorker from '$lib/workers/pyodide.worker?worker';
@@ -86,6 +86,42 @@
 
 	const bc = new BroadcastChannel('active-tab-channel');
 
+	// Helper function to safely access localStorage
+	const safeGetLocalStorage = (key: string): string | null => {
+		try {
+			if (typeof window !== 'undefined' && localStorage) {
+				return localStorage.getItem(key);
+			}
+		} catch (e) {
+			console.warn(`Could not access localStorage for ${key}:`, e);
+		}
+		return null;
+	};
+
+	const safeSetLocalStorage = (key: string, value: string): boolean => {
+		try {
+			if (typeof window !== 'undefined' && localStorage) {
+				localStorage.setItem(key, value);
+				return true;
+			}
+		} catch (e) {
+			console.warn(`Could not set localStorage for ${key}:`, e);
+		}
+		return false;
+	};
+
+	const safeRemoveLocalStorage = (key: string): boolean => {
+		try {
+			if (typeof window !== 'undefined' && localStorage) {
+				localStorage.removeItem(key);
+				return true;
+			}
+		} catch (e) {
+			console.warn(`Could not remove localStorage for ${key}:`, e);
+		}
+		return false;
+	};
+
 	let loaded = false;
 	let tokenTimer = null;
 
@@ -98,7 +134,9 @@
 
 	const BREAKPOINT = 768;
 
-	const setupSocket = async (enableWebsocket) => {
+		const setupSocket = async (enableWebsocket) => {
+		const token = safeGetLocalStorage('token');
+		
 		const _socket = io(`${WEBUI_BASE_URL}` || undefined, {
 			reconnection: true,
 			reconnectionDelay: 1000,
@@ -106,7 +144,7 @@
 			randomizationFactor: 0.5,
 			path: '/ws/socket.io',
 			transports: enableWebsocket ? ['websocket'] : ['polling', 'websocket'],
-			auth: { token: localStorage.token }
+			auth: token ? { token } : {}
 		});
 		await socket.set(_socket);
 
@@ -116,45 +154,47 @@
 
 		_socket.on('connect', async () => {
 			console.log('connected', _socket.id);
-			const res = await getVersion(localStorage.token);
+			const token = safeGetLocalStorage('token');
+			
+			if (token) {
+				const res = await getVersion(token);
 
-			const deploymentId = res?.deployment_id ?? null;
-			const version = res?.version ?? null;
+				const deploymentId = res?.deployment_id ?? null;
+				const version = res?.version ?? null;
 
-			if (version !== null || deploymentId !== null) {
-				if (
-					($WEBUI_VERSION !== null && version !== $WEBUI_VERSION) ||
-					($WEBUI_DEPLOYMENT_ID !== null && deploymentId !== $WEBUI_DEPLOYMENT_ID)
-				) {
-					await unregisterServiceWorkers();
-					location.href = location.href;
-					return;
+				if (version !== null || deploymentId !== null) {
+					if (
+						($WEBUI_VERSION !== null && version !== $WEBUI_VERSION) ||
+						($WEBUI_DEPLOYMENT_ID !== null && deploymentId !== $WEBUI_DEPLOYMENT_ID)
+					) {
+						await unregisterServiceWorkers();
+						location.href = location.href;
+						return;
+					}
 				}
-			}
 
-			// Send heartbeat every 30 seconds
-			heartbeatInterval = setInterval(() => {
-				if (_socket.connected) {
-					console.log('Sending heartbeat');
-					_socket.emit('heartbeat', {});
+				// Send heartbeat every 30 seconds
+				heartbeatInterval = setInterval(() => {
+					if (_socket.connected) {
+						console.log('Sending heartbeat');
+						_socket.emit('heartbeat', {});
+					}
+				}, 30000);
+
+				if (deploymentId !== null) {
+					WEBUI_DEPLOYMENT_ID.set(deploymentId);
 				}
-			}, 30000);
 
-			if (deploymentId !== null) {
-				WEBUI_DEPLOYMENT_ID.set(deploymentId);
-			}
+				if (version !== null) {
+					WEBUI_VERSION.set(version);
+				}
 
-			if (version !== null) {
-				WEBUI_VERSION.set(version);
-			}
+				console.log('version', version);
 
-			console.log('version', version);
-
-			if (localStorage.getItem('token')) {
 				// Emit user-join event with auth token
-				_socket.emit('user-join', { auth: { token: localStorage.token } });
+				_socket.emit('user-join', { auth: { token } });
 			} else {
-				console.warn('No token found in localStorage, user-join event not emitted');
+				console.warn('No token found, user-join event not emitted');
 			}
 		});
 
@@ -298,7 +338,7 @@
 			} else if (auth_type === 'none') {
 				// No authentication
 			} else if (auth_type === 'session') {
-				toolServerToken = localStorage.token;
+				toolServerToken = safeGetLocalStorage('token') || '';
 			}
 
 			const res = await executeToolServer(
@@ -381,9 +421,15 @@
 				}
 			} else if (type === 'chat:title') {
 				currentChatPage.set(1);
-				await chats.set(await getChatList(localStorage.token, $currentChatPage));
+				const token = safeGetLocalStorage('token');
+				if (token) {
+					await chats.set(await getChatList(token, $currentChatPage));
+				}
 			} else if (type === 'chat:tags') {
-				tags.set(await getAllTags(localStorage.token));
+				const token = safeGetLocalStorage('token');
+				if (token) {
+					tags.set(await getAllTags(token));
+				}
 			}
 		} else if (data?.session_id === $socket.id) {
 			if (type === 'execute:python') {
@@ -491,7 +537,9 @@
 
 		// handle channel created event
 		if (event.data?.type === 'channel:created') {
-			const res = await getChannels(localStorage.token).catch(async (error) => {
+			const token = safeGetLocalStorage('token');
+			if (!token) return;
+			const res = await getChannels(token).catch(async (error) => {
 				return null;
 			});
 
@@ -542,7 +590,9 @@
 						})
 					);
 				} else {
-					const res = await getChannels(localStorage.token).catch(async (error) => {
+					const token = safeGetLocalStorage('token');
+					if (!token) return;
+					const res = await getChannels(token).catch(async (error) => {
 						return null;
 					});
 
@@ -701,7 +751,10 @@
 		// Call visibility change handler initially to set state on load
 		handleVisibilityChange();
 
-		theme.set(localStorage.theme);
+		const themeValue = safeGetLocalStorage('theme');
+		if (themeValue) {
+			theme.set(themeValue);
+		}
 
 		mobile.set(window.innerWidth < BREAKPOINT);
 
@@ -722,11 +775,25 @@
 				$socket?.on('events', chatEventHandler);
 				$socket?.on('events:channel', channelEventHandler);
 
-				const userSettings = await getUserSettings(localStorage.token);
-				if (userSettings) {
-					settings.set(userSettings.ui);
-				} else {
-					settings.set(JSON.parse(localStorage.getItem('settings') ?? '{}'));
+				const token = safeGetLocalStorage('token');
+				
+				if (token) {
+					const userSettings = await getUserSettings(token);
+					if (userSettings) {
+						settings.set(userSettings.ui);
+					} else {
+						const storedSettings = safeGetLocalStorage('settings');
+						if (storedSettings) {
+							try {
+								settings.set(JSON.parse(storedSettings));
+							} catch (e) {
+								console.warn('Could not parse settings from localStorage:', e);
+								settings.set({});
+							}
+						} else {
+							settings.set({});
+						}
+					}
 				}
 				setTextScale($settings?.textScale ?? 1);
 
@@ -747,21 +814,34 @@
 			console.log('Backend config:', backendConfig);
 		} catch (error) {
 			console.error('Error loading backend config:', error);
+			// In private browsing, cookies might be blocked but backend might still be accessible
+			// Don't immediately redirect to error page - allow public routes to work
+			if ($page.url.pathname.startsWith('/public')) {
+				console.log('Public route detected, continuing despite backend config error');
+			}
 		}
 		// Initialize i18n even if we didn't get a backend config,
 		// so `/error` can show something that's not `undefined`.
 
-		initI18n(localStorage?.locale);
-		if (!localStorage.locale) {
-			const languages = await getLanguages();
-			const browserLanguages = navigator.languages
-				? navigator.languages
-				: [navigator.language || navigator.userLanguage];
-			const lang = backendConfig.default_locale
-				? backendConfig.default_locale
-				: bestMatchingLanguage(languages, browserLanguages, 'en-US');
-			changeLanguage(lang);
-			dayjs.locale(lang);
+		initI18n(safeGetLocalStorage('locale'));
+		
+		if (!backendConfig || !backendConfig.default_locale) {
+			try {
+				const languages = await getLanguages();
+				const browserLanguages = navigator.languages
+					? navigator.languages
+					: [navigator.language || navigator.userLanguage];
+				const lang = backendConfig?.default_locale
+					? backendConfig.default_locale
+					: bestMatchingLanguage(languages, browserLanguages, 'en-US');
+				changeLanguage(lang);
+				dayjs.locale(lang);
+			} catch (e) {
+				console.warn('Could not load languages:', e);
+			}
+		} else {
+			changeLanguage(backendConfig.default_locale);
+			dayjs.locale(backendConfig.default_locale);
 		}
 
 		if (backendConfig) {
@@ -775,20 +855,29 @@
 				const currentUrl = `${window.location.pathname}${window.location.search}`;
 				const encodedUrl = encodeURIComponent(currentUrl);
 
-				if (localStorage.token) {
+				// Safely check localStorage
+				const token = safeGetLocalStorage('token');
+
+				if (token) {
 					// Get Session User Info
-					const sessionUser = await getSessionUser(localStorage.token).catch((error) => {
-						toast.error(`${error}`);
+					const sessionUser = await getSessionUser(token).catch((error) => {
+						console.error('Error getting session user:', error);
 						return null;
 					});
 
 					if (sessionUser) {
 						await user.set(sessionUser);
-						await config.set(await getBackendConfig());
+						try {
+							await config.set(await getBackendConfig());
+						} catch (e) {
+							console.warn('Could not refresh backend config:', e);
+						}
 					} else {
 						// Redirect Invalid Session User to /auth Page
-						localStorage.removeItem('token');
-						await goto(`/auth?redirect=${encodedUrl}`);
+						safeRemoveLocalStorage('token');
+						if (!$page.url.pathname.startsWith('/public')) {
+							await goto(`/auth?redirect=${encodedUrl}`);
+						}
 					}
 				} else {
 					// Don't redirect if we're already on the auth page or public routes
@@ -799,8 +888,12 @@
 				}
 			}
 		} else {
-			// Redirect to /error when Backend Not Detected
-			await goto(`/error`);
+			// Only redirect to /error if we're not on a public route
+			// Public routes should work even without backend config (for guest access)
+			if (!$page.url.pathname.startsWith('/public') && $page.url.pathname !== '/error') {
+				// Redirect to /error when Backend Not Detected
+				await goto(`/error`);
+			}
 		}
 
 		await tick();

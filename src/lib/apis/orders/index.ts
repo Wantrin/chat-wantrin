@@ -42,10 +42,38 @@ export interface Order {
 	total: number;
 	currency: string;
 	status: string;
+	tracking_number?: string;
+	carrier?: string;
+	tracking_url?: string;
+	shipped_at?: number;
+	estimated_delivery_date?: number;
+	delivered_at?: number;
+	assigned_user_id?: string;
+	assigned_delivery_person_id?: string;
 	notes?: string;
 	meta?: object;
 	created_at: number;
 	updated_at: number;
+}
+
+export interface OrderStatusHistory {
+	id: string;
+	order_id: string;
+	status: string;
+	notes?: string;
+	created_at: number;
+}
+
+export interface OrderUpdateForm {
+	status?: string;
+	tracking_number?: string;
+	carrier?: string;
+	tracking_url?: string;
+	estimated_delivery_date?: number;
+	assigned_user_id?: string;
+	assigned_delivery_person_id?: string;
+	notes?: string;
+	meta?: object;
 }
 
 export const createNewOrder = async (token: string | null, order: OrderForm) => {
@@ -125,7 +153,12 @@ export const getOrdersByUserId = async (token: string, userId: string, page: num
 		searchParams.append('page', `${page}`);
 	}
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/orders/user/${userId}?${searchParams.toString()}`, {
+	const queryString = searchParams.toString();
+	const url = queryString 
+		? `${WEBUI_API_BASE_URL}/orders/user/${userId}?${queryString}`
+		: `${WEBUI_API_BASE_URL}/orders/user/${userId}`;
+
+	const res = await fetch(url, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -158,7 +191,18 @@ export const getOrdersByShopId = async (token: string, shopId: string, page: num
 		searchParams.append('page', `${page}`);
 	}
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/orders/shop/${shopId}?${searchParams.toString()}`, {
+	// Clean shopId to remove any trailing colons or invalid characters
+	const cleanShopId = shopId?.trim().replace(/[:;]/g, '');
+	if (!cleanShopId) {
+		throw new Error('Invalid shop ID');
+	}
+
+	const queryString = searchParams.toString();
+	const url = queryString 
+		? `${WEBUI_API_BASE_URL}/orders/shop/${cleanShopId}?${queryString}`
+		: `${WEBUI_API_BASE_URL}/orders/shop/${cleanShopId}`;
+
+	const res = await fetch(url, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -167,12 +211,15 @@ export const getOrdersByShopId = async (token: string, shopId: string, page: num
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) {
+				const errorData = await res.json().catch(() => ({ detail: `HTTP ${res.status}: ${res.statusText}` }));
+				throw errorData;
+			}
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
-			console.error(err);
+			error = err.detail || err.message || err;
+			console.error('Error in getOrdersByShopId:', err);
 			return null;
 		});
 
@@ -183,7 +230,7 @@ export const getOrdersByShopId = async (token: string, shopId: string, page: num
 	return res;
 };
 
-export const updateOrderById = async (token: string, id: string, updates: { status?: string; notes?: string; meta?: object }) => {
+export const updateOrderById = async (token: string, id: string, updates: OrderUpdateForm) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/orders/${id}/update`, {
@@ -210,4 +257,32 @@ export const updateOrderById = async (token: string, id: string, updates: { stat
 	}
 
 	return res;
+};
+
+export const getOrderStatusHistory = async (token: string, orderId: string): Promise<OrderStatusHistory[]> => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/orders/${orderId}/status-history`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail || err.message;
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res || [];
 };

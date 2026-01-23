@@ -17,6 +17,9 @@
 	let loading = false;
 	let submitting = false;
 
+	$: primaryColor = $shopColors.primary || shop?.primary_color || '#3B82F6'; // Default blue
+	$: secondaryColor = $shopColors.secondary || shop?.secondary_color || '#F97316'; // Default orange
+
 	// Form fields
 	let customerName = '';
 	let customerEmail = '';

@@ -17,8 +17,8 @@
 	$: currentShopName.set(null);
 	$: currentShopImage.set(null);
 	
-	$: primaryColor = '#3B82F6'; // Default blue
-	$: secondaryColor = '#F97316'; // Default orange
+	const primaryColor = '#3B82F6'; // Default blue
+	const secondaryColor = '#F97316'; // Default orange
 
 	let showScrollToTop = false;
 	let shopsContainer: HTMLElement;

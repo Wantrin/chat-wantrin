@@ -26,7 +26,7 @@
 	};
 
 	const checkIfPublic = () => {
-		return shop && shop.access_control === null;
+		return shop && shop.is_public === true;
 	};
 </script>
 
@@ -50,7 +50,7 @@
 			{#if !checkIfPublic()}
 				<div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
 					<p class="text-sm text-yellow-800 dark:text-yellow-400">
-						{$i18n ? $i18n.t('This shop is not public. To share it, set access_control to null in the shop settings.') : 'This shop is not public. To share it, set access_control to null in the shop settings.'}
+						{$i18n ? $i18n.t('This shop is not public. To share it, enable "Make this shop public" in the shop settings.') : 'This shop is not public. To share it, enable "Make this shop public" in the shop settings.'}
 					</p>
 				</div>
 			{:else}

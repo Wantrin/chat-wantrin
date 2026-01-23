@@ -305,7 +305,7 @@ Be conversational, helpful, and provide practical advice. Format your responses 
 							}
 						}
 					} catch (error) {
-						console.log(error);
+						// Error handled silently
 					}
 				}
 			}
