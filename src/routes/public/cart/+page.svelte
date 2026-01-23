@@ -3,10 +3,14 @@
 	import { getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { cart } from '$lib/stores/cart';
+	import { shopColors } from '$lib/stores/shopColors';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 	import Loader from '$lib/components/common/Loader.svelte';
 
 	const i18n = getContext('i18n');
+
+	$: primaryColor = $shopColors.primary || '#3B82F6'; // Default blue
+	$: secondaryColor = $shopColors.secondary || '#F97316'; // Default orange
 
 	let cartItems = [];
 	let loading = false;
@@ -83,7 +87,14 @@
 				</p>
 				<a
 					href="/public/shops"
-					class="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+					class="inline-block px-6 py-3 text-white rounded-lg transition"
+					style="background-color: {primaryColor};"
+					on:mouseenter={(e) => {
+						e.currentTarget.style.opacity = '0.9';
+					}}
+					on:mouseleave={(e) => {
+						e.currentTarget.style.opacity = '1';
+					}}
 				>
 					{$i18n ? $i18n.t('Continue Shopping') : 'Continue Shopping'}
 				</a>
@@ -185,14 +196,28 @@
 
 						<button
 							on:click={proceedToCheckout}
-							class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+							class="w-full px-6 py-3 text-white rounded-lg transition font-semibold"
+							style="background-color: {primaryColor};"
+							on:mouseenter={(e) => {
+								e.currentTarget.style.opacity = '0.9';
+							}}
+							on:mouseleave={(e) => {
+								e.currentTarget.style.opacity = '1';
+							}}
 						>
 							{$i18n ? $i18n.t('Proceed to Checkout') : 'Proceed to Checkout'}
 						</button>
 
 						<a
 							href="/public/shops"
-							class="block text-center mt-4 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+							class="block text-center mt-4 transition-colors"
+							style="color: {primaryColor};"
+							on:mouseenter={(e) => {
+								e.currentTarget.style.opacity = '0.8';
+							}}
+							on:mouseleave={(e) => {
+								e.currentTarget.style.opacity = '1';
+							}}
 						>
 							{$i18n ? $i18n.t('Continue Shopping') : 'Continue Shopping'}
 						</a>

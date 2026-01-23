@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { getContext } from 'svelte';
 	import { getBackendConfig } from '$lib/apis';
 	import { WEBUI_NAME, config } from '$lib/stores';
-	import CartIcon from '$lib/components/cart/CartIcon.svelte';
+	import EcommerceHeader from '$lib/components/ecommerce/EcommerceHeader.svelte';
+	import EcommerceFooter from '$lib/components/ecommerce/EcommerceFooter.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -20,29 +21,48 @@
 		} catch (error) {
 			console.error('Error loading config:', error);
 		}
+		
+		// Enable scrolling for public pages
+		if (typeof document !== 'undefined') {
+			document.documentElement.classList.add('public-page');
+			document.body.classList.add('public-page');
+		}
+		
 		loaded = true;
+	});
+	
+	onDestroy(() => {
+		// Clean up classes when leaving public pages
+		if (typeof document !== 'undefined') {
+			document.documentElement.classList.remove('public-page');
+			document.body.classList.remove('public-page');
+		}
 	});
 </script>
 
 {#if loaded}
-	<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-		<nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
-			<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-				<div class="flex justify-between items-center h-16">
-					<div class="flex items-center">
-						<a href="/public/shops" class="text-xl font-bold text-gray-900 dark:text-gray-100">
-							{$WEBUI_NAME || 'Shops'}
-						</a>
-					</div>
-					<div class="flex items-center gap-4">
-						<a href="/public/shops" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
-							{$i18n ? $i18n.t('Shops') : 'Shops'}
-						</a>
-						<CartIcon />
-					</div>
-				</div>
-			</div>
-		</nav>
-		<slot />
+	<div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col w-full">
+		<EcommerceHeader />
+		<main class="flex-1 w-full overflow-visible pt-16">
+			<slot />
+		</main>
+		<EcommerceFooter />
 	</div>
 {/if}
+
+<style>
+	:global(html.public-page) {
+		height: auto !important;
+		min-height: 100vh;
+		overflow-x: hidden !important;
+		overflow-y: auto !important;
+	}
+
+	:global(body.public-page) {
+		height: auto !important;
+		min-height: 100vh;
+		overflow-x: hidden !important;
+		overflow-y: auto !important;
+		position: relative !important;
+	}
+</style>

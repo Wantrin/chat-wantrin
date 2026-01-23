@@ -152,6 +152,23 @@
 {:else if product}
 	<div class="max-w-3xl mx-auto p-6">
 		<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-8">
+			<div class="mb-6">
+				<button
+					on:click={() => {
+						if (product && product.shop_id) {
+							goto(`/shops/${product.shop_id}`);
+						} else {
+							goto('/products');
+						}
+					}}
+					class="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors mb-4"
+				>
+					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+					</svg>
+					<span>{product && product.shop_id ? $i18n.t('Back to Shop') : $i18n.t('Back')}</span>
+				</button>
+			</div>
 			<h1 class="text-3xl font-bold mb-8 bg-gradient-to-r from-orange-600 to-orange-600 dark:from-orange-400 dark:to-orange-400 bg-clip-text text-transparent">
 				{$i18n.t('Edit Product')}
 			</h1>

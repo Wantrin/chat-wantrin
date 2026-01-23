@@ -6,6 +6,7 @@
 	import { toast } from 'svelte-sonner';
 	import { getShopById } from '$lib/apis/shops';
 	import { user, showSidebar } from '$lib/stores';
+	import { shopColors } from '$lib/stores/shopColors';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 	import ShareShopModal from '$lib/components/shops/ShareShopModal.svelte';
 
@@ -14,6 +15,9 @@
 	let shop = null;
 	let loading = true;
 	let showShareModal = false;
+
+	$: primaryColor = shop?.primary_color || '#3B82F6'; // Default blue
+	$: secondaryColor = shop?.secondary_color || '#F97316'; // Default orange
 
 	$: shopIdentifier = shop ? (shop.url || shop.id) : null;
 
@@ -29,6 +33,11 @@
 			const res = await getShopById(localStorage.token, shopId);
 			if (res) {
 				shop = res;
+				// Set shop colors
+				shopColors.set({
+					primary: res.primary_color || null,
+					secondary: res.secondary_color || null
+				});
 			} else {
 				toast.error($i18n.t('Shop not found'));
 				goto('/shops');
@@ -61,7 +70,10 @@
 							class="w-full h-full min-h-[400px] object-cover"
 						/>
 					{:else}
-						<div class="w-full h-full min-h-[400px] bg-gradient-to-br from-blue-400 via-orange-500 to-blue-600 dark:from-blue-600 dark:via-orange-600 dark:to-blue-800 flex items-center justify-center">
+						<div
+							class="w-full h-full min-h-[400px] flex items-center justify-center"
+							style="background: linear-gradient(135deg, {primaryColor} 0%, {secondaryColor} 50%, {primaryColor} 100%);"
+						>
 							<span class="text-white text-lg font-medium">{$i18n.t('No Image')}</span>
 						</div>
 					{/if}
@@ -69,7 +81,10 @@
 				</div>
 				<div class="p-8 flex flex-col justify-between">
 					<div>
-						<h1 class="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-orange-600 dark:from-blue-400 dark:to-orange-400 bg-clip-text text-transparent">
+						<h1
+							class="text-4xl font-bold mb-4 bg-clip-text text-transparent"
+							style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%); -webkit-background-clip: text; background-clip: text;"
+						>
 							{shop.name}
 						</h1>
 						{#if shop.description}
@@ -80,25 +95,53 @@
 						<div class="mt-6 flex gap-3 flex-wrap">
 							<button
 								on:click={() => goto(`/shops/${shopIdentifier}/edit`)}
-								class="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+								class="px-6 py-3 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+								style="background: linear-gradient(to right, {primaryColor} 0%, {primaryColor} 100%);"
+								on:mouseenter={(e) => {
+									e.currentTarget.style.opacity = '0.9';
+								}}
+								on:mouseleave={(e) => {
+									e.currentTarget.style.opacity = '1';
+								}}
 							>
 								{$i18n.t('Edit Shop')}
 							</button>
 							<button
 								on:click={() => goto(`/shops/${shopIdentifier}/products/create`)}
-								class="px-6 py-3 bg-gradient-to-r from-blue-500 to-orange-600 hover:from-blue-600 hover:to-orange-700 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+								class="px-6 py-3 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+								style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%);"
+								on:mouseenter={(e) => {
+									e.currentTarget.style.opacity = '0.9';
+								}}
+								on:mouseleave={(e) => {
+									e.currentTarget.style.opacity = '1';
+								}}
 							>
 								{$i18n.t('Add Product')}
 							</button>
 							<button
 								on:click={() => goto(`/shops/${shopIdentifier}/products`)}
-								class="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+								class="px-6 py-3 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+								style="background: linear-gradient(to right, {secondaryColor} 0%, {secondaryColor} 100%);"
+								on:mouseenter={(e) => {
+									e.currentTarget.style.opacity = '0.9';
+								}}
+								on:mouseleave={(e) => {
+									e.currentTarget.style.opacity = '1';
+								}}
 							>
 								{$i18n.t('View Products')}
 							</button>
 							<button
 								on:click={() => goto(`/shops/${shopIdentifier}/orders`)}
-								class="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+								class="px-6 py-3 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+								style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%); opacity: 0.8;"
+								on:mouseenter={(e) => {
+									e.currentTarget.style.opacity = '0.9';
+								}}
+								on:mouseleave={(e) => {
+									e.currentTarget.style.opacity = '0.8';
+								}}
 							>
 								{$i18n.t('View Orders')}
 							</button>
@@ -106,7 +149,14 @@
 								on:click={() => {
 									showShareModal = true;
 								}}
-								class="px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5 flex items-center gap-2"
+								class="px-6 py-3 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5 flex items-center gap-2"
+								style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%);"
+								on:mouseenter={(e) => {
+									e.currentTarget.style.opacity = '0.9';
+								}}
+								on:mouseleave={(e) => {
+									e.currentTarget.style.opacity = '1';
+								}}
 							>
 								<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -118,7 +168,14 @@
 						<div class="mt-6">
 							<button
 								on:click={() => goto(`/shops/${shopIdentifier}/products`)}
-								class="px-8 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+								class="px-8 py-3 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5"
+								style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%);"
+								on:mouseenter={(e) => {
+									e.currentTarget.style.opacity = '0.9';
+								}}
+								on:mouseleave={(e) => {
+									e.currentTarget.style.opacity = '1';
+								}}
 							>
 								{$i18n.t('View Products')}
 							</button>

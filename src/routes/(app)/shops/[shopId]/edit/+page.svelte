@@ -15,6 +15,8 @@
 	let name = '';
 	let description = '';
 	let url = '';
+	let primaryColor = '#3B82F6'; // Default blue
+	let secondaryColor = '#F97316'; // Default orange
 	let imageFileId: string | null = null;
 	let imagePreview: string | null = null;
 	let imageFile: File | null = null;
@@ -80,6 +82,8 @@
 				description: description || null,
 				image_url: imageFileId || shop.image_url || null,
 				url: sanitizedUrl,  // Send empty string if cleared, not null
+				primary_color: primaryColor || null,
+				secondary_color: secondaryColor || null,
 				access_control: isPublic ? null : (shop.access_control || {})
 			});
 
@@ -117,6 +121,8 @@
 				name = res.name;
 				description = res.description || '';
 				url = res.url || '';
+				primaryColor = res.primary_color || '#3B82F6';
+				secondaryColor = res.secondary_color || '#F97316';
 				imageFileId = res.image_url || null;
 				isPublic = res.access_control === null;
 				if (imageFileId && !imageFileId.startsWith('http')) {
@@ -144,6 +150,20 @@
 {:else if shop}
 	<div class="max-w-3xl mx-auto p-6">
 		<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-8">
+			<div class="mb-6">
+				<button
+					on:click={() => {
+						const shopId = $page.params.shopId;
+						goto(`/shops/${shopId}`);
+					}}
+					class="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors mb-4"
+				>
+					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+					</svg>
+					<span>{$i18n.t('Back to Shop')}</span>
+				</button>
+			</div>
 			<h1 class="text-3xl font-bold mb-8 bg-gradient-to-r from-blue-600 to-orange-600 dark:from-blue-400 dark:to-orange-400 bg-clip-text text-transparent">
 				{$i18n.t('Edit Shop')}
 			</h1>
@@ -198,6 +218,55 @@
 							</div>
 						{/if}
 				</div>
+			</div>
+
+			<div>
+				<label class="block text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
+					{$i18n.t('Brand Colors')} <span class="text-gray-400 text-xs">({$i18n.t('optional')})</span>
+				</label>
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label class="block text-xs font-medium mb-2 text-gray-600 dark:text-gray-400">
+							{$i18n.t('Primary Color')}
+						</label>
+						<div class="flex items-center gap-2">
+							<input
+								type="color"
+								bind:value={primaryColor}
+								class="w-16 h-12 rounded-lg border-2 border-gray-300 dark:border-gray-600 cursor-pointer"
+							/>
+							<input
+								type="text"
+								bind:value={primaryColor}
+								pattern="^#[0-9A-Fa-f]{6}$"
+								placeholder="#3B82F6"
+								class="flex-1 px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+							/>
+						</div>
+					</div>
+					<div>
+						<label class="block text-xs font-medium mb-2 text-gray-600 dark:text-gray-400">
+							{$i18n.t('Secondary Color')}
+						</label>
+						<div class="flex items-center gap-2">
+							<input
+								type="color"
+								bind:value={secondaryColor}
+								class="w-16 h-12 rounded-lg border-2 border-gray-300 dark:border-gray-600 cursor-pointer"
+							/>
+							<input
+								type="text"
+								bind:value={secondaryColor}
+								pattern="^#[0-9A-Fa-f]{6}$"
+								placeholder="#F97316"
+								class="flex-1 px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+							/>
+						</div>
+					</div>
+				</div>
+				<p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+					{$i18n.t('These colors will be used in the shop header, footer, and buttons')}
+				</p>
 			</div>
 
 			<div>

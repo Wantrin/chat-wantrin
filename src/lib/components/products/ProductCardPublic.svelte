@@ -2,10 +2,14 @@
 	import { getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { cart } from '$lib/stores/cart';
+	import { shopColors } from '$lib/stores/shopColors';
 	import { toast } from 'svelte-sonner';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 	const i18n = getContext('i18n');
+
+	$: primaryColor = $shopColors.primary || '#3B82F6'; // Default blue
+	$: secondaryColor = $shopColors.secondary || '#F97316'; // Default orange
 
 	export let item;
 	export let publicRoute = true; // Use public routes by default
@@ -51,7 +55,14 @@
 </script>
 
 <div
-	class="group bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-600 hover:-translate-y-1"
+	class="group bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-200 dark:border-gray-700 hover:-translate-y-1"
+	style="--hover-border-color: {secondaryColor};"
+	on:mouseenter={(e) => {
+		e.currentTarget.style.borderColor = secondaryColor;
+	}}
+	on:mouseleave={(e) => {
+		e.currentTarget.style.borderColor = '';
+	}}
 >
 	<div class="relative overflow-hidden cursor-pointer" on:click={handleCardClick}>
 		{#if coverUrl}
@@ -61,17 +72,30 @@
 				class="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-110"
 			/>
 		{:else}
-			<div class="w-full h-48 bg-gradient-to-br from-blue-400 via-orange-500 to-blue-600 dark:from-blue-600 dark:via-orange-600 dark:to-blue-800 flex items-center justify-center">
-				<span class="text-white text-sm font-medium">{$i18n ? $i18n.t('No Image') : 'No Image'}</span>
-			</div>
+			<div
+			class="w-full h-48 flex items-center justify-center"
+			style="background: linear-gradient(135deg, {primaryColor} 0%, {secondaryColor} 50%, {primaryColor} 100%);"
+		>
+			<span class="text-white text-sm font-medium">{$i18n ? $i18n.t('No Image') : 'No Image'}</span>
+		</div>
 		{/if}
 		<div class="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
 	</div>
 	<div class="p-5">
 		<div class="mb-3">
-			<h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 line-clamp-2 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors cursor-pointer" on:click={handleCardClick}>
-				{item.name}
-			</h3>
+			<h3
+			class="text-lg font-bold text-gray-900 dark:text-gray-100 line-clamp-2 transition-colors cursor-pointer"
+			style="--hover-color: {secondaryColor};"
+			on:click={handleCardClick}
+			on:mouseenter={(e) => {
+				e.currentTarget.style.color = secondaryColor;
+			}}
+			on:mouseleave={(e) => {
+				e.currentTarget.style.color = '';
+			}}
+		>
+			{item.name}
+		</h3>
 		</div>
 		{#if item.description}
 			<p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">
@@ -79,7 +103,10 @@
 			</p>
 		{/if}
 		<div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-100 dark:border-gray-700">
-			<span class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-orange-600 dark:from-blue-400 dark:to-orange-400 bg-clip-text text-transparent">
+			<span
+				class="text-2xl font-bold bg-clip-text text-transparent"
+				style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%); -webkit-background-clip: text; background-clip: text;"
+			>
 				{formatPrice(item.price, item.currency)}
 			</span>
 			{#if item.stock !== undefined}
@@ -109,7 +136,16 @@
 		<button
 			on:click={handleAddToCart}
 			disabled={item.stock !== undefined && item.stock <= 0}
-			class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+			class="w-full px-4 py-2 text-white rounded-lg transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+			style="background-color: {primaryColor};"
+			on:mouseenter={(e) => {
+				if (!(item.stock !== undefined && item.stock <= 0)) {
+					e.currentTarget.style.opacity = '0.9';
+				}
+			}}
+			on:mouseleave={(e) => {
+				e.currentTarget.style.opacity = '1';
+			}}
 		>
 			<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 				<path

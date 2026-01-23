@@ -55,6 +55,11 @@
 			const res = await getPublicShopById(shopId);
 			if (res) {
 				shop = res;
+				// Set shop colors
+				shopColors.set({
+					primary: res.primary_color || null,
+					secondary: res.secondary_color || null
+				});
 			} else {
 				toast.error($i18n ? $i18n.t('Shop not found') : 'Shop not found');
 				goto('/public/cart');
@@ -183,7 +188,16 @@
 									id="name"
 									type="text"
 									bind:value={customerName}
-									class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+									class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
+									style="--focus-ring-color: {primaryColor};"
+									on:focus={(e) => {
+										e.currentTarget.style.borderColor = primaryColor;
+										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+									}}
+									on:blur={(e) => {
+										e.currentTarget.style.borderColor = '';
+										e.currentTarget.style.boxShadow = '';
+									}}
 									required
 								/>
 							</div>
@@ -199,7 +213,16 @@
 									id="email"
 									type="email"
 									bind:value={customerEmail}
-									class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+									class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
+									style="--focus-ring-color: {primaryColor};"
+									on:focus={(e) => {
+										e.currentTarget.style.borderColor = primaryColor;
+										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+									}}
+									on:blur={(e) => {
+										e.currentTarget.style.borderColor = '';
+										e.currentTarget.style.boxShadow = '';
+									}}
 									required
 								/>
 							</div>
@@ -215,7 +238,16 @@
 									id="phone"
 									type="tel"
 									bind:value={customerPhone}
-									class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+									class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
+									style="--focus-ring-color: {primaryColor};"
+									on:focus={(e) => {
+										e.currentTarget.style.borderColor = primaryColor;
+										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+									}}
+									on:blur={(e) => {
+										e.currentTarget.style.borderColor = '';
+										e.currentTarget.style.boxShadow = '';
+									}}
 								/>
 							</div>
 
@@ -230,7 +262,16 @@
 									id="street"
 									type="text"
 									bind:value={street}
-									class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+									class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
+									style="--focus-ring-color: {primaryColor};"
+									on:focus={(e) => {
+										e.currentTarget.style.borderColor = primaryColor;
+										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+									}}
+									on:blur={(e) => {
+										e.currentTarget.style.borderColor = '';
+										e.currentTarget.style.boxShadow = '';
+									}}
 									required
 								/>
 							</div>
@@ -247,7 +288,16 @@
 										id="city"
 										type="text"
 										bind:value={city}
-										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
+									style="--focus-ring-color: {primaryColor};"
+									on:focus={(e) => {
+										e.currentTarget.style.borderColor = primaryColor;
+										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+									}}
+									on:blur={(e) => {
+										e.currentTarget.style.borderColor = '';
+										e.currentTarget.style.boxShadow = '';
+									}}
 										required
 									/>
 								</div>
@@ -263,7 +313,16 @@
 										id="postalCode"
 										type="text"
 										bind:value={postalCode}
-										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
+									style="--focus-ring-color: {primaryColor};"
+									on:focus={(e) => {
+										e.currentTarget.style.borderColor = primaryColor;
+										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+									}}
+									on:blur={(e) => {
+										e.currentTarget.style.borderColor = '';
+										e.currentTarget.style.boxShadow = '';
+									}}
 										required
 									/>
 								</div>
@@ -281,7 +340,16 @@
 										id="country"
 										type="text"
 										bind:value={country}
-										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
+									style="--focus-ring-color: {primaryColor};"
+									on:focus={(e) => {
+										e.currentTarget.style.borderColor = primaryColor;
+										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+									}}
+									on:blur={(e) => {
+										e.currentTarget.style.borderColor = '';
+										e.currentTarget.style.boxShadow = '';
+									}}
 										required
 									/>
 								</div>
@@ -297,7 +365,16 @@
 										id="state"
 										type="text"
 										bind:value={state}
-										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
+									style="--focus-ring-color: {primaryColor};"
+									on:focus={(e) => {
+										e.currentTarget.style.borderColor = primaryColor;
+										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+									}}
+									on:blur={(e) => {
+										e.currentTarget.style.borderColor = '';
+										e.currentTarget.style.boxShadow = '';
+									}}
 									/>
 								</div>
 							</div>
@@ -313,7 +390,16 @@
 									id="notes"
 									bind:value={notes}
 									rows="3"
-									class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+									class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
+									style="--focus-ring-color: {primaryColor};"
+									on:focus={(e) => {
+										e.currentTarget.style.borderColor = primaryColor;
+										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+									}}
+									on:blur={(e) => {
+										e.currentTarget.style.borderColor = '';
+										e.currentTarget.style.boxShadow = '';
+									}}
 								></textarea>
 							</div>
 						</div>
@@ -359,7 +445,16 @@
 						<button
 							on:click={submitOrder}
 							disabled={submitting}
-							class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+							class="w-full px-6 py-3 text-white rounded-lg transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+							style="background-color: {primaryColor};"
+							on:mouseenter={(e) => {
+								if (!submitting) {
+									e.currentTarget.style.opacity = '0.9';
+								}
+							}}
+							on:mouseleave={(e) => {
+								e.currentTarget.style.opacity = '1';
+							}}
 						>
 							{submitting
 								? ($i18n ? $i18n.t('Placing Order...') : 'Placing Order...')

@@ -12,9 +12,9 @@
 </script>
 
 <div class="relative">
-	<a href="/cart" class="flex items-center">
+	<a href="/public/cart" class="flex items-center">
 		<svg
-			class="w-6 h-6 text-gray-700 dark:text-gray-300"
+			class="w-6 h-6 text-white"
 			fill="none"
 			viewBox="0 0 24 24"
 			stroke="currentColor"
@@ -28,7 +28,8 @@
 		</svg>
 		{#if itemCount > 0}
 			<span
-				class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center"
+				class="absolute -top-2 -right-2 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center"
+				style="background-color: rgba(255, 255, 255, 0.3); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.5);"
 			>
 				{itemCount}
 			</span>

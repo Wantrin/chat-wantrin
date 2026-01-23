@@ -33,6 +33,8 @@ class Shop(Base):
     description = Column(Text, nullable=True)
     image_url = Column(Text, nullable=True)
     url = Column(Text, nullable=True, unique=True)  # URL slug for public access
+    primary_color = Column(Text, nullable=True)  # Primary brand color (hex code)
+    secondary_color = Column(Text, nullable=True)  # Secondary brand color (hex code)
     meta = Column(JSON, nullable=True)
 
     access_control = Column(JSON, nullable=True)
@@ -50,6 +52,8 @@ class ShopModel(BaseModel):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    primary_color: Optional[str] = None  # Primary brand color (hex code, e.g., #3B82F6)
+    secondary_color: Optional[str] = None  # Secondary brand color (hex code, e.g., #F97316)
     meta: Optional[dict] = None
 
     access_control: Optional[dict] = None
@@ -68,6 +72,8 @@ class ShopForm(BaseModel):
     description: Optional[str] = None
     image_url: Optional[str] = None
     url: Optional[str] = None
+    primary_color: Optional[str] = None  # Primary brand color (hex code, e.g., #3B82F6)
+    secondary_color: Optional[str] = None  # Secondary brand color (hex code, e.g., #F97316)
     meta: Optional[dict] = None
     access_control: Optional[dict] = None
 
@@ -77,6 +83,8 @@ class ShopUpdateForm(BaseModel):
     description: Optional[str] = None
     image_url: Optional[str] = None
     url: Optional[str] = None
+    primary_color: Optional[str] = None  # Primary brand color (hex code, e.g., #3B82F6)
+    secondary_color: Optional[str] = None  # Secondary brand color (hex code, e.g., #F97316)
     meta: Optional[dict] = None
     access_control: Optional[dict] = None
 
@@ -408,6 +416,10 @@ class ShopTable:
                 shop.description = form_data_dict["description"]
             if "image_url" in form_data_dict:
                 shop.image_url = form_data_dict["image_url"]
+            if "primary_color" in form_data_dict:
+                shop.primary_color = form_data_dict["primary_color"]
+            if "secondary_color" in form_data_dict:
+                shop.secondary_color = form_data_dict["secondary_color"]
             
             # Handle URL update
             if url_was_provided:

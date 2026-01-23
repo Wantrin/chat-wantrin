@@ -1,13 +1,19 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { getContext } from 'svelte';
 	import { page } from '$app/stores';
 	import { getPublicShopById } from '$lib/apis/shops';
 	import { getPublicProductById as getPublicProduct } from '$lib/apis/products';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import { currentShopName } from '$lib/stores/currentShop';
+	import { currentShopImage } from '$lib/stores/currentShopImage';
+	import { shopColors } from '$lib/stores/shopColors';
 	import { cart } from '$lib/stores/cart';
 	import { toast } from 'svelte-sonner';
 	import Loader from '$lib/components/common/Loader.svelte';
+
+	$: primaryColor = $shopColors.primary || '#3B82F6'; // Default blue
+	$: secondaryColor = $shopColors.secondary || '#F97316'; // Default orange
 
 	const i18n = getContext('i18n');
 
@@ -48,6 +54,21 @@
 
 			if (shopRes) {
 				shop = shopRes;
+				// Set shop name in store for Header and Footer
+				if (shopRes.name) {
+					currentShopName.set(shopRes.name);
+				}
+				// Set shop image in store for Header
+				if (shopRes.image_url) {
+					currentShopImage.set(shopRes.image_url);
+				} else {
+					currentShopImage.set(null);
+				}
+				// Set shop colors in store
+				shopColors.set({
+					primary: shopRes.primary_color || null,
+					secondary: shopRes.secondary_color || null
+				});
 			}
 			if (productRes) {
 				product = productRes;
@@ -61,6 +82,13 @@
 
 	onMount(() => {
 		loadData();
+	});
+
+	onDestroy(() => {
+		// Clear shop name, image and colors when leaving the page
+		currentShopName.set(null);
+		currentShopImage.set(null);
+		shopColors.set({ primary: null, secondary: null });
 	});
 </script>
 
@@ -198,7 +226,14 @@
 										toast.success($i18n ? $i18n.t('Product added to cart') : 'Product added to cart');
 									}
 								}}
-								class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+								class="w-full px-6 py-3 text-white rounded-lg transition font-semibold"
+								style="background-color: {primaryColor};"
+								on:mouseenter={(e) => {
+									e.currentTarget.style.opacity = '0.9';
+								}}
+								on:mouseleave={(e) => {
+									e.currentTarget.style.opacity = '1';
+								}}
 							>
 								{$i18n ? $i18n.t('Add to Cart') : 'Add to Cart'}
 							</button>
@@ -214,7 +249,17 @@
 			<h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
 				{$i18n ? $i18n.t('Product not found') : 'Product not found'}
 			</h1>
-			<a href="/public/shops" class="text-blue-600 hover:text-blue-800">
+			<a
+				href="/public/shops"
+				class="transition-colors"
+				style="color: {primaryColor};"
+				on:mouseenter={(e) => {
+					e.currentTarget.style.opacity = '0.8';
+				}}
+				on:mouseleave={(e) => {
+					e.currentTarget.style.opacity = '1';
+				}}
+			>
 				{$i18n ? $i18n.t('Back to shops') : 'Back to shops'}
 			</a>
 		</div>

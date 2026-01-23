@@ -368,31 +368,8 @@ async def delete_product_by_id(
 # Public Product Endpoints (No Authentication Required)
 ############################
 
-
-@router.get("/public/{id}", response_model=Optional[ProductModel])
-async def get_public_product_by_id(
-    request: Request,
-    id: str,
-    db: Session = Depends(get_session),
-):
-    """
-    Public endpoint to get a product by ID.
-    Only returns products that are public (access_control is None).
-    """
-    product = Products.get_product_by_id(id, db=db)
-    if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
-        )
-
-    # Only return public products (access_control is None)
-    if product.access_control is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
-        )
-
-    return product
-
+# IMPORTANT: More specific routes must be defined BEFORE parameterized routes
+# Otherwise FastAPI will match /public/search as /public/{id} with id="search"
 
 @router.get("/public/search", response_model=ProductListResponse)
 async def search_public_products(
@@ -438,3 +415,28 @@ async def search_public_products(
     result = Products.search_products(None, filter, skip=skip, limit=limit, db=db)
     
     return result
+
+
+@router.get("/public/{id}", response_model=Optional[ProductModel])
+async def get_public_product_by_id(
+    request: Request,
+    id: str,
+    db: Session = Depends(get_session),
+):
+    """
+    Public endpoint to get a product by ID.
+    Only returns products that are public (access_control is None).
+    """
+    product = Products.get_product_by_id(id, db=db)
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+    # Only return public products (access_control is None)
+    if product.access_control is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+    return product

@@ -341,31 +341,6 @@ async def delete_shop_by_id_or_url(
 ############################
 
 
-@router.get("/public/{identifier}", response_model=Optional[ShopModel])
-async def get_public_shop_by_id_or_url(
-    request: Request,
-    identifier: str,
-    db: Session = Depends(get_session),
-):
-    """
-    Public endpoint to get a shop by ID or URL slug.
-    Only returns shops that are public (access_control is None).
-    """
-    shop = Shops.get_shop_by_id_or_url(identifier, db=db)
-    if not shop:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
-        )
-
-    # Only return public shops (access_control is None)
-    if shop.access_control is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
-        )
-
-    return shop
-
-
 @router.get("/public/search", response_model=ShopListResponse)
 async def search_public_shops(
     request: Request,
@@ -402,3 +377,28 @@ async def search_public_shops(
     result = Shops.search_shops(None, filter, skip=skip, limit=limit, db=db)
     
     return result
+
+
+@router.get("/public/{identifier}", response_model=Optional[ShopModel])
+async def get_public_shop_by_id_or_url(
+    request: Request,
+    identifier: str,
+    db: Session = Depends(get_session),
+):
+    """
+    Public endpoint to get a shop by ID or URL slug.
+    Only returns shops that are public (access_control is None).
+    """
+    shop = Shops.get_shop_by_id_or_url(identifier, db=db)
+    if not shop:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+    # Only return public shops (access_control is None)
+    if shop.access_control is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+    return shop
