@@ -88,7 +88,7 @@
 				<a
 					href="/public/shops"
 					class="inline-block px-6 py-3 text-white rounded-lg transition"
-					style="background-color: {primaryColor};"
+					style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%);"
 					on:mouseenter={(e) => {
 						e.currentTarget.style.opacity = '0.9';
 					}}
@@ -197,7 +197,7 @@
 						<button
 							on:click={proceedToCheckout}
 							class="w-full px-6 py-3 text-white rounded-lg transition font-semibold"
-							style="background-color: {primaryColor};"
+							style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%);"
 							on:mouseenter={(e) => {
 								e.currentTarget.style.opacity = '0.9';
 							}}

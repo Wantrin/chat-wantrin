@@ -270,7 +270,7 @@
 						on:click={loadMore}
 						disabled={productsLoading}
 						class="inline-flex items-center px-8 py-3 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all"
-						style="background-color: {primaryColor};"
+						style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%);"
 						on:mouseenter={(e) => {
 							if (!productsLoading) {
 								e.currentTarget.style.opacity = '0.9';
@@ -316,7 +316,7 @@
 		<button
 			on:click={scrollToTop}
 			class="fixed bottom-8 right-8 z-50 p-4 text-white rounded-full shadow-lg transition-all transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2"
-			style="background-color: {primaryColor}; --hover-opacity: 0.9;"
+			style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%); --hover-opacity: 0.9;"
 			on:mouseenter={(e) => {
 				e.currentTarget.style.opacity = '0.9';
 			}}

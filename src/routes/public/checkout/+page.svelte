@@ -7,6 +7,7 @@
 	import { cart } from '$lib/stores/cart';
 	import { createNewOrder } from '$lib/apis/orders';
 	import { getPublicShopById } from '$lib/apis/shops';
+	import { shopColors } from '$lib/stores/shopColors';
 	import Loader from '$lib/components/common/Loader.svelte';
 
 	const i18n = getContext('i18n');
@@ -446,7 +447,7 @@
 							on:click={submitOrder}
 							disabled={submitting}
 							class="w-full px-6 py-3 text-white rounded-lg transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-							style="background-color: {primaryColor};"
+							style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%);"
 							on:mouseenter={(e) => {
 								if (!submitting) {
 									e.currentTarget.style.opacity = '0.9';

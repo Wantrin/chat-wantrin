@@ -137,7 +137,7 @@
 			on:click={handleAddToCart}
 			disabled={item.stock !== undefined && item.stock <= 0}
 			class="w-full px-4 py-2 text-white rounded-lg transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-			style="background-color: {primaryColor};"
+			style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%);"
 			on:mouseenter={(e) => {
 				if (!(item.stock !== undefined && item.stock <= 0)) {
 					e.currentTarget.style.opacity = '0.9';
