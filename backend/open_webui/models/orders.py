@@ -9,7 +9,7 @@ from open_webui.internal.db import Base, get_db, get_db_context
 from open_webui.models.users import User, UserModel, Users, UserResponse
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Boolean, Column, String, Text, JSON, Float
+from sqlalchemy import BigInteger, Boolean, Column, String, Text, JSON, Float, ForeignKey
 
 ####################
 # Order DB Schema
@@ -52,6 +52,18 @@ class Order(Base):
     # Order status
     status = Column(Text, default=OrderStatus.PENDING.value)
     
+    # Delivery tracking information
+    tracking_number = Column(Text, nullable=True)
+    carrier = Column(Text, nullable=True)  # e.g., "Colissimo", "Chronopost", "DHL", etc.
+    tracking_url = Column(Text, nullable=True)
+    shipped_at = Column(BigInteger, nullable=True)
+    estimated_delivery_date = Column(BigInteger, nullable=True)
+    delivered_at = Column(BigInteger, nullable=True)
+    
+    # Delivery assignment
+    assigned_user_id = Column(Text, nullable=True)  # User assigned to manage this delivery
+    assigned_delivery_person_id = Column(Text, nullable=True)  # Delivery person assigned to deliver
+    
     # Additional information
     notes = Column(Text, nullable=True)
     meta = Column(JSON, nullable=True)
@@ -80,6 +92,18 @@ class OrderModel(BaseModel):
     currency: str
     
     status: str = OrderStatus.PENDING.value
+    
+    # Delivery tracking information
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
+    tracking_url: Optional[str] = None
+    shipped_at: Optional[int] = None
+    estimated_delivery_date: Optional[int] = None
+    delivered_at: Optional[int] = None
+    
+    # Delivery assignment
+    assigned_user_id: Optional[str] = None
+    assigned_delivery_person_id: Optional[str] = None
     
     notes: Optional[str] = None
     meta: Optional[dict] = None
@@ -123,6 +147,12 @@ class OrderForm(BaseModel):
 
 class OrderUpdateForm(BaseModel):
     status: Optional[str] = None
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
+    tracking_url: Optional[str] = None
+    estimated_delivery_date: Optional[int] = None
+    assigned_user_id: Optional[str] = None
+    assigned_delivery_person_id: Optional[str] = None
     notes: Optional[str] = None
     meta: Optional[dict] = None
 
@@ -225,7 +255,36 @@ class OrderTable:
             form_data = form_data.model_dump(exclude_unset=True)
 
             if "status" in form_data:
-                order.status = form_data["status"]
+                old_status = order.status
+                new_status = form_data["status"]
+                
+                # Only update if status changed
+                if old_status != new_status:
+                    order.status = new_status
+                    
+                    # Create status history entry (will be created after OrderStatusHistories is defined)
+                    # We'll handle this in the router to avoid circular import
+                    
+                    # Auto-set shipped_at when status changes to "shipped"
+                    if new_status == OrderStatus.SHIPPED.value and not order.shipped_at:
+                        order.shipped_at = int(time.time_ns())
+                    
+                    # Auto-set delivered_at when status changes to "delivered"
+                    if new_status == OrderStatus.DELIVERED.value and not order.delivered_at:
+                        order.delivered_at = int(time.time_ns())
+            
+            if "tracking_number" in form_data:
+                order.tracking_number = form_data["tracking_number"]
+            if "carrier" in form_data:
+                order.carrier = form_data["carrier"]
+            if "tracking_url" in form_data:
+                order.tracking_url = form_data["tracking_url"]
+            if "estimated_delivery_date" in form_data:
+                order.estimated_delivery_date = form_data["estimated_delivery_date"]
+            if "assigned_user_id" in form_data:
+                order.assigned_user_id = form_data["assigned_user_id"]
+            if "assigned_delivery_person_id" in form_data:
+                order.assigned_delivery_person_id = form_data["assigned_delivery_person_id"]
             if "notes" in form_data:
                 order.notes = form_data["notes"]
             if "meta" in form_data:
@@ -247,3 +306,69 @@ class OrderTable:
 
 
 Orders = OrderTable()
+
+
+####################
+# Order Status History
+####################
+
+
+class OrderStatusHistory(Base):
+    __tablename__ = "order_status_history"
+
+    id = Column(Text, primary_key=True, unique=True)
+    order_id = Column(Text, ForeignKey("order.id"), nullable=False)
+    status = Column(Text, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(BigInteger, nullable=False)
+
+
+class OrderStatusHistoryModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    order_id: str
+    status: str
+    notes: Optional[str] = None
+    created_at: int
+
+
+class OrderStatusHistoryForm(BaseModel):
+    status: str
+    notes: Optional[str] = None
+
+
+class OrderStatusHistoryTable:
+    def insert_status_history(
+        self,
+        order_id: str,
+        status: str,
+        notes: Optional[str] = None,
+        db: Optional[Session] = None,
+    ) -> Optional[OrderStatusHistoryModel]:
+        with get_db_context(db) as db:
+            history = OrderStatusHistory(
+                id=str(uuid.uuid4()),
+                order_id=order_id,
+                status=status,
+                notes=notes,
+                created_at=int(time.time_ns()),
+            )
+            db.add(history)
+            db.commit()
+            return OrderStatusHistoryModel.model_validate(history)
+
+    def get_status_history_by_order_id(
+        self, order_id: str, db: Optional[Session] = None
+    ) -> list[OrderStatusHistoryModel]:
+        with get_db_context(db) as db:
+            history = (
+                db.query(OrderStatusHistory)
+                .filter(OrderStatusHistory.order_id == order_id)
+                .order_by(OrderStatusHistory.created_at.asc())
+                .all()
+            )
+            return [OrderStatusHistoryModel.model_validate(h) for h in history]
+
+
+OrderStatusHistories = OrderStatusHistoryTable()

@@ -22,6 +22,8 @@ from fastapi import (
 
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, cast, String
+from sqlalchemy.dialects.postgresql import JSONB
 from open_webui.internal.db import get_session, SessionLocal
 
 from open_webui.constants import ERROR_MESSAGES
@@ -38,6 +40,8 @@ from open_webui.models.files import (
 from open_webui.models.chats import Chats
 from open_webui.models.knowledge import Knowledges
 from open_webui.models.groups import Groups
+from open_webui.models.shops import Shops
+from open_webui.models.products import Products
 
 
 from open_webui.routers.retrieval import ProcessFileForm, process_file
@@ -615,6 +619,110 @@ async def update_file_data_content_by_id(
 
 
 ############################
+# Check if file is associated with a public shop or product
+############################
+
+
+def is_file_public(file_id: str, db: Session) -> bool:
+    """Check if a file is associated with a public shop or product."""
+    from open_webui.models.shops import Shop
+    from open_webui.models.products import Product
+    
+    dialect_name = db.bind.dialect.name
+    
+    # Check if file is used as shop image_url
+    shops = db.query(Shop).filter(
+        Shop.image_url == file_id,
+        Shop.is_public == True
+    ).all()
+    if shops:
+        return True
+    
+    # Check if file is used as product image_url
+    # Public products have access_control = None or "null" (string)
+    products_with_image_url = db.query(Product).filter(
+        Product.image_url == file_id,
+        or_(
+            Product.access_control.is_(None),
+            cast(Product.access_control, String) == "null"
+        )
+    ).all()
+    
+    # Check if file is in product image_urls array
+    # Handle different database dialects
+    if dialect_name == "sqlite":
+        # SQLite stores JSON as text, get all public products and filter in Python
+        products_with_image_urls = db.query(Product).filter(
+            or_(
+                Product.access_control.is_(None),
+                cast(Product.access_control, String) == "null"
+            )
+        ).all()
+        # Filter in Python for SQLite
+        # Handle both list and JSON string formats
+        filtered_products = []
+        for p in products_with_image_urls:
+            if p.image_urls:
+                # Handle JSON string (SQLite stores JSON as text)
+                if isinstance(p.image_urls, str):
+                    try:
+                        import json
+                        image_urls_list = json.loads(p.image_urls)
+                        if isinstance(image_urls_list, list) and file_id in image_urls_list:
+                            filtered_products.append(p)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                elif isinstance(p.image_urls, list) and file_id in p.image_urls:
+                    filtered_products.append(p)
+        products_with_image_urls = filtered_products
+    elif dialect_name == "postgresql":
+        # PostgreSQL supports JSONB operations
+        products_with_image_urls = db.query(Product).filter(
+            cast(Product.image_urls, JSONB).contains([file_id]),
+            or_(
+                Product.access_control.is_(None),
+                cast(Product.access_control, String) == "null"
+            )
+        ).all()
+    else:
+        # Fallback: get all public products and filter in Python
+        products_with_image_urls = db.query(Product).filter(
+            or_(
+                Product.access_control.is_(None),
+                cast(Product.access_control, String) == "null"
+            )
+        ).all()
+        # Handle both list and JSON string formats
+        filtered_products = []
+        for p in products_with_image_urls:
+            if p.image_urls:
+                # Handle JSON string (some databases store JSON as text)
+                if isinstance(p.image_urls, str):
+                    try:
+                        import json
+                        image_urls_list = json.loads(p.image_urls)
+                        if isinstance(image_urls_list, list) and file_id in image_urls_list:
+                            filtered_products.append(p)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                elif isinstance(p.image_urls, list) and file_id in p.image_urls:
+                    filtered_products.append(p)
+        products_with_image_urls = filtered_products
+    
+    # Combine both lists
+    all_products = list(products_with_image_url) + list(products_with_image_urls)
+    
+    if all_products:
+        # Also check if the shop is public
+        for product in all_products:
+            shop = Shops.get_shop_by_id(product.shop_id, db=db)
+            if shop and shop.is_public:
+                return True
+    
+    return False
+
+
+############################
 # Get File Content By Id
 ############################
 
@@ -622,73 +730,116 @@ async def update_file_data_content_by_id(
 @router.get("/{id}/content")
 async def get_file_content_by_id(
     id: str,
-    user=Depends(get_verified_user),
+    request: Request,
     attachment: bool = Query(False),
     db: Session = Depends(get_session),
 ):
+    # Try to get user, but don't require it
+    user = None
+    try:
+        from open_webui.utils.auth import get_http_authorization_cred, decode_token
+        auth_header = request.headers.get("Authorization")
+        if auth_header:
+            cred = get_http_authorization_cred(auth_header)
+            if cred:
+                data = decode_token(cred.credentials)
+                if data and "id" in data:
+                    user = Users.get_user_by_id(data["id"], db=db)
+    except Exception:
+        pass  # User is not authenticated, continue as public
+    
+    # Check if file is public (associated with public shop/product)
+    if not user:
+        try:
+            is_public = is_file_public(id, db)
+            if is_public:
+                # Allow public access
+                pass
+            else:
+                # Require authentication for non-public files
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=ERROR_MESSAGES.UNAUTHORIZED,
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error(f"Error checking if file {id} is public: {e}")
+            # On error, require authentication for security
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ERROR_MESSAGES.UNAUTHORIZED,
+            )
+    else:
+        # User is authenticated, check access
+        file = Files.get_file_by_id(id, db=db)
+        if not file:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ERROR_MESSAGES.NOT_FOUND,
+            )
+        
+        if not (
+            file.user_id == user.id
+            or user.role == "admin"
+            or has_access_to_file(id, "read", user, db=db)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ERROR_MESSAGES.NOT_FOUND,
+            )
+    
+    # Get file (for both authenticated and public access)
     file = Files.get_file_by_id(id, db=db)
-
     if not file:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
+    
+    # Serve the file
+    try:
+        file_path = Storage.get_file(file.path)
+        file_path = Path(file_path)
 
-    if (
-        file.user_id == user.id
-        or user.role == "admin"
-        or has_access_to_file(id, "read", user, db=db)
-    ):
-        try:
-            file_path = Storage.get_file(file.path)
-            file_path = Path(file_path)
+        # Check if the file already exists in the cache
+        if file_path.is_file():
+            # Handle Unicode filenames
+            filename = file.meta.get("name", file.filename)
+            encoded_filename = quote(filename)  # RFC5987 encoding
 
-            # Check if the file already exists in the cache
-            if file_path.is_file():
-                # Handle Unicode filenames
-                filename = file.meta.get("name", file.filename)
-                encoded_filename = quote(filename)  # RFC5987 encoding
+            content_type = file.meta.get("content_type")
+            headers = {}
 
-                content_type = file.meta.get("content_type")
-                filename = file.meta.get("name", file.filename)
-                encoded_filename = quote(filename)
-                headers = {}
-
-                if attachment:
+            if attachment:
+                headers["Content-Disposition"] = (
+                    f"attachment; filename*=UTF-8''{encoded_filename}"
+                )
+            else:
+                if content_type == "application/pdf" or filename.lower().endswith(
+                    ".pdf"
+                ):
+                    headers["Content-Disposition"] = (
+                        f"inline; filename*=UTF-8''{encoded_filename}"
+                    )
+                    content_type = "application/pdf"
+                elif content_type != "text/plain":
                     headers["Content-Disposition"] = (
                         f"attachment; filename*=UTF-8''{encoded_filename}"
                     )
-                else:
-                    if content_type == "application/pdf" or filename.lower().endswith(
-                        ".pdf"
-                    ):
-                        headers["Content-Disposition"] = (
-                            f"inline; filename*=UTF-8''{encoded_filename}"
-                        )
-                        content_type = "application/pdf"
-                    elif content_type != "text/plain":
-                        headers["Content-Disposition"] = (
-                            f"attachment; filename*=UTF-8''{encoded_filename}"
-                        )
 
-                return FileResponse(file_path, headers=headers, media_type=content_type)
-
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=ERROR_MESSAGES.NOT_FOUND,
-                )
-        except Exception as e:
-            log.exception(e)
-            log.error("Error getting file content")
+            return FileResponse(file_path, headers=headers, media_type=content_type)
+        else:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT("Error getting file content"),
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ERROR_MESSAGES.NOT_FOUND,
             )
-    else:
+    except Exception as e:
+        log.exception(e)
+        log.error("Error getting file content")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ERROR_MESSAGES.NOT_FOUND,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT("Error getting file content"),
         )
 
 
@@ -736,11 +887,6 @@ async def get_html_file_content_by_id(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=ERROR_MESSAGES.DEFAULT("Error getting file content"),
             )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
 
 
 @router.get("/{id}/content/{file_name}")

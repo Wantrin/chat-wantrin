@@ -368,12 +368,11 @@ async def search_public_shops(
     if direction:
         filter["direction"] = direction
 
-    # Only show public shops (access_control is None)
-    # We'll use a dummy user_id and let the search filter handle public access
-    filter["user_id"] = None  # This will be handled specially in search_shops
+    # Only show public shops (is_public is True)
+    filter["is_public"] = True
     filter["permission"] = "read"
 
-    # Get all public shops (user_id=None means public access only)
+    # Get all public shops
     result = Shops.search_shops(None, filter, skip=skip, limit=limit, db=db)
     
     return result
@@ -395,8 +394,8 @@ async def get_public_shop_by_id_or_url(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
 
-    # Only return public shops (access_control is None)
-    if shop.access_control is not None:
+    # Only return public shops (is_public is True)
+    if not shop.is_public:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )

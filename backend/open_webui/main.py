@@ -97,6 +97,7 @@ from open_webui.routers import (
     products,
     shops,
     orders,
+    delivery_persons,
 )
 
 from open_webui.routers.retrieval import (
@@ -1396,13 +1397,100 @@ async def inspect_websocket(request: Request, call_next):
     return await call_next(request)
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ALLOW_ORIGIN,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Configure CORS middleware
+# When allow_credentials=True, we cannot use "*" as allow_origins
+# Browsers require explicit origins when credentials are included
+# We use a custom middleware to handle wildcard with credentials
+if CORS_ALLOW_ORIGIN == ["*"]:
+    class WildcardCORSMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            origin = request.headers.get("origin")
+            
+            # List of allowed headers (explicit list required when using credentials)
+            # Must include all headers that the frontend might send
+            allowed_headers = [
+                "content-type",
+                "authorization",
+                "accept",
+                "accept-language",
+                "origin",
+                "x-requested-with",
+                "cache-control",
+                "pragma",
+                "expires",
+                "if-modified-since",
+                "if-none-match",
+                "x-process-time",
+                "access-control-request-method",
+                "access-control-request-headers",
+            ]
+            
+            # Handle preflight requests
+            if request.method == "OPTIONS":
+                response = Response()
+                if origin:
+                    # Get requested headers from Access-Control-Request-Headers
+                    requested_headers = request.headers.get("access-control-request-headers", "")
+                    # Normalize requested headers to lowercase for comparison
+                    requested_list = [h.strip().lower() for h in requested_headers.split(",") if h.strip()]
+                    # Normalize allowed headers to lowercase
+                    allowed_lower = [h.lower() for h in allowed_headers]
+                    # Merge: use requested headers if they're in our allowed list, otherwise use allowed headers
+                    # This ensures we allow what the browser asks for (if safe) plus our defaults
+                    final_headers_set = set(allowed_lower)
+                    for req_header in requested_list:
+                        if req_header:  # Only add non-empty headers
+                            final_headers_set.add(req_header)
+                    # Convert back to list and sort for consistency
+                    final_headers = sorted(list(final_headers_set))
+                    # Return as comma-separated string (headers are case-insensitive but we'll use lowercase)
+                    response.headers["Access-Control-Allow-Origin"] = origin
+                    response.headers["Access-Control-Allow-Credentials"] = "true"
+                    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+                    response.headers["Access-Control-Allow-Headers"] = ", ".join(final_headers)
+                    response.headers["Access-Control-Max-Age"] = "86400"
+                return response
+            
+            response = await call_next(request)
+            
+            # If origin is present, echo it back (required for credentials)
+            if origin:
+                # Use the same allowed headers list for consistency
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+                response.headers["Access-Control-Allow-Headers"] = ", ".join([h.lower() for h in allowed_headers])
+                response.headers["Access-Control-Expose-Headers"] = ", ".join([h.lower() for h in allowed_headers])
+            
+            return response
+    
+    app.add_middleware(WildcardCORSMiddleware)
+else:
+    # Use explicit headers list for better compatibility
+    # FastAPI CORSMiddleware with allow_headers=["*"] should work, but
+    # some browsers may have issues, so we use explicit list
+    explicit_headers = [
+        "content-type",
+        "authorization",
+        "accept",
+        "accept-language",
+        "origin",
+        "x-requested-with",
+        "cache-control",
+        "pragma",
+        "expires",
+        "if-modified-since",
+        "if-none-match",
+        "x-process-time",
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=CORS_ALLOW_ORIGIN,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allow_headers=explicit_headers,
+        expose_headers=explicit_headers,
+    )
 
 
 app.mount("/ws", socket_app)
@@ -1432,6 +1520,7 @@ app.include_router(task_items.router, prefix="/api/v1/task_items", tags=["task_i
 app.include_router(shops.router, prefix="/api/v1/shops", tags=["shops"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["products"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["orders"])
+app.include_router(delivery_persons.router, prefix="/api/v1/delivery-persons", tags=["delivery-persons"])
 
 
 app.include_router(models.router, prefix="/api/v1/models", tags=["models"])

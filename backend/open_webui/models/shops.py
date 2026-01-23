@@ -37,7 +37,8 @@ class Shop(Base):
     secondary_color = Column(Text, nullable=True)  # Secondary brand color (hex code)
     meta = Column(JSON, nullable=True)
 
-    access_control = Column(JSON, nullable=True)
+    is_public = Column(Boolean, default=False)  # Public visibility for external clients (website)
+    access_control = Column(JSON, nullable=True)  # Internal access control for shop management
 
     created_at = Column(BigInteger)
     updated_at = Column(BigInteger)
@@ -52,11 +53,13 @@ class ShopModel(BaseModel):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    url: Optional[str] = None  # URL slug for public access
     primary_color: Optional[str] = None  # Primary brand color (hex code, e.g., #3B82F6)
     secondary_color: Optional[str] = None  # Secondary brand color (hex code, e.g., #F97316)
     meta: Optional[dict] = None
 
-    access_control: Optional[dict] = None
+    is_public: bool = False  # Public visibility for external clients (website)
+    access_control: Optional[dict] = None  # Internal access control for shop management
 
     created_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch
@@ -75,7 +78,8 @@ class ShopForm(BaseModel):
     primary_color: Optional[str] = None  # Primary brand color (hex code, e.g., #3B82F6)
     secondary_color: Optional[str] = None  # Secondary brand color (hex code, e.g., #F97316)
     meta: Optional[dict] = None
-    access_control: Optional[dict] = None
+    is_public: Optional[bool] = False  # Public visibility for external clients (website)
+    access_control: Optional[dict] = None  # Internal access control for shop management
 
 
 class ShopUpdateForm(BaseModel):
@@ -86,7 +90,8 @@ class ShopUpdateForm(BaseModel):
     primary_color: Optional[str] = None  # Primary brand color (hex code, e.g., #3B82F6)
     secondary_color: Optional[str] = None  # Secondary brand color (hex code, e.g., #F97316)
     meta: Optional[dict] = None
-    access_control: Optional[dict] = None
+    is_public: Optional[bool] = None  # Public visibility for external clients (website)
+    access_control: Optional[dict] = None  # Internal access control for shop management
 
 
 class ShopUserResponse(ShopModel):
@@ -206,7 +211,11 @@ class ShopTable:
             # Generate URL slug if not provided
             if not form_dict.get("url"):
                 base_slug = generate_slug(form_dict["name"])
-                form_dict["url"] = make_unique_slug(base_slug, db)
+                if base_slug:
+                    form_dict["url"] = make_unique_slug(base_slug, db)
+                else:
+                    # Fallback if name generates empty slug
+                    form_dict["url"] = make_unique_slug(f"shop-{uuid.uuid4().hex[:8]}", db)
             else:
                 # Sanitize and ensure provided URL is unique
                 sanitized_url = sanitize_url(form_dict["url"])
@@ -215,7 +224,15 @@ class ShopTable:
                 else:
                     # If sanitization results in empty, generate from name
                     base_slug = generate_slug(form_dict["name"])
-                    form_dict["url"] = make_unique_slug(base_slug, db)
+                    if base_slug:
+                        form_dict["url"] = make_unique_slug(base_slug, db)
+                    else:
+                        # Fallback if name generates empty slug
+                        form_dict["url"] = make_unique_slug(f"shop-{uuid.uuid4().hex[:8]}", db)
+            
+            # Ensure URL is always set (should never be None or empty at this point)
+            if not form_dict.get("url") or not form_dict["url"].strip():
+                form_dict["url"] = make_unique_slug(f"shop-{uuid.uuid4().hex[:8]}", db)
             
             shop = ShopModel(
                 **{
@@ -277,15 +294,16 @@ class ShopTable:
                 else:
                     permission = "read"
 
+                # Filter by is_public if specified in filter
+                if "is_public" in filter:
+                    is_public_filter = filter["is_public"]
+                    query = query.filter(Shop.is_public == is_public_filter)
+                
                 # For public access (user_id is None), only show public shops
                 if user_id is None:
-                    query = query.filter(
-                        or_(
-                            Shop.access_control.is_(None),
-                            cast(Shop.access_control, String) == "null",
-                        )
-                    )
+                    query = query.filter(Shop.is_public == True)
                 else:
+                    # Apply internal access control for authenticated users
                     query = self._has_permission(
                         db,
                         query,
@@ -453,8 +471,20 @@ class ShopTable:
             if "meta" in form_data_dict:
                 shop.meta = {**shop.meta, **form_data_dict["meta"]} if shop.meta else form_data_dict["meta"]
 
+            if "is_public" in form_data_dict:
+                shop.is_public = form_data_dict["is_public"]
+
             if "access_control" in form_data_dict:
                 shop.access_control = form_data_dict["access_control"]
+
+            # Ensure URL always exists - generate it if it's missing
+            if not shop.url or not shop.url.strip():
+                base_slug = generate_slug(shop.name)
+                if base_slug:
+                    shop.url = make_unique_slug(base_slug, db, exclude_id=shop_id)
+                else:
+                    # Fallback to shop ID if name is empty
+                    shop.url = make_unique_slug(f"shop-{shop_id[:8]}", db, exclude_id=shop_id)
 
             shop.updated_at = int(time.time_ns())
 
