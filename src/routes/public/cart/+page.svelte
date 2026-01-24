@@ -105,10 +105,21 @@
 					<div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
 						<div class="divide-y divide-gray-200 dark:divide-gray-700">
 							{#each cartItems as item (item.product_id)}
+								{@const firstImageUrl = (() => {
+									// Support both old format (image_url) and new format (image_urls)
+									if (item.image_urls && Array.isArray(item.image_urls) && item.image_urls.length > 0) {
+										return imageUrl(item.image_urls[0]);
+									}
+									// Fallback for old format (legacy compatibility)
+									if ((item as any).image_url) {
+										return imageUrl((item as any).image_url);
+									}
+									return null;
+								})()}
 								<div class="p-6 flex items-center gap-4">
-									{#if imageUrl(item.image_url)}
+									{#if firstImageUrl}
 										<img
-											src={imageUrl(item.image_url)}
+											src={firstImageUrl}
 											alt={item.name}
 											class="w-24 h-24 object-cover rounded-lg"
 										/>

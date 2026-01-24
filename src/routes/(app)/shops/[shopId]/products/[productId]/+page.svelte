@@ -6,6 +6,7 @@
 	import { getProductById } from '$lib/apis/products';
 	import { user, showSidebar } from '$lib/stores';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import ImageCarousel from '$lib/components/common/ImageCarousel.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -17,14 +18,24 @@
 
 	const toDisplayUrl = (u: string) => (u.startsWith('http') ? u : `${WEBUI_API_BASE_URL}/files/${u}/content`);
 
-	$: imageUrls =
-		product?.image_urls && Array.isArray(product.image_urls)
-			? product.image_urls
-			: product?.image_url
-				? [product.image_url]
-				: [];
-
-	$: mainImageUrl = imageUrls.length > 0 ? toDisplayUrl(imageUrls[0]) : null;
+	$: imageUrls = (() => {
+		if (product?.image_urls) {
+			let urls = product.image_urls;
+			if (typeof urls === 'string') {
+				try {
+					urls = JSON.parse(urls);
+				} catch (e) {
+					return [];
+				}
+			}
+			if (Array.isArray(urls)) {
+				return urls
+					.filter(url => url && typeof url === 'string' && url.trim() !== '')
+					.map(url => toDisplayUrl(url));
+			}
+		}
+		return [];
+	})();
 
 	onMount(async () => {
 		try {
@@ -66,22 +77,16 @@
 		<div class="max-w-6xl mx-auto p-6 w-full">
 		<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-0">
-				<div class="relative overflow-hidden bg-gray-100 dark:bg-gray-900">
-					{#if mainImageUrl}
-						<img src={mainImageUrl} alt={product.name} class="w-full h-full min-h-[500px] object-cover" />
-					{:else}
-						<div class="w-full h-full min-h-[500px] bg-gradient-to-br from-orange-400 via-orange-500 to-red-500 dark:from-orange-600 dark:via-orange-700 dark:to-red-600 flex items-center justify-center">
-							<span class="text-white text-lg font-medium">{$i18n.t('No Image')}</span>
-						</div>
-					{/if}
-
-					{#if imageUrls.length > 1}
-						<div class="absolute bottom-4 left-4 right-4 grid grid-cols-4 gap-2">
-							{#each imageUrls.slice(1) as u (u)}
-								<img src={toDisplayUrl(u)} alt="thumb" class="w-full h-16 object-cover rounded-lg border-2 border-white dark:border-gray-700 shadow-lg hover:scale-110 transition-transform cursor-pointer" />
-							{/each}
-						</div>
-					{/if}
+				<div class="p-4 bg-gray-100 dark:bg-gray-900">
+					<div class="w-full h-full min-h-[500px]">
+						<ImageCarousel
+							images={imageUrls}
+							showThumbnails={true}
+							showIndicators={true}
+							showArrows={true}
+							autoPlay={false}
+						/>
+					</div>
 				</div>
 
 				<div class="p-8 flex flex-col justify-between">

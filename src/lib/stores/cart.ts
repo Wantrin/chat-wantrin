@@ -6,7 +6,7 @@ export interface CartItem {
 	name: string;
 	price: number;
 	currency: string;
-	image_url?: string;
+	image_urls?: string[];
 	quantity: number;
 }
 
@@ -23,7 +23,28 @@ const createCartStore = () => {
 		if (stored) {
 			try {
 				const parsed = JSON.parse(stored);
-				set({ items: parsed.items || [] });
+				// Migrate old format (image_url) to new format (image_urls)
+				const migratedItems = (parsed.items || []).map((item: any) => {
+					// If item has old image_url format, convert to image_urls
+					if (item.image_url && !item.image_urls) {
+						return {
+							...item,
+							image_urls: [item.image_url],
+							image_url: undefined
+						};
+					}
+					// Remove image_url if it exists alongside image_urls
+					if (item.image_url && item.image_urls) {
+						const { image_url, ...rest } = item;
+						return rest;
+					}
+					return item;
+				});
+				set({ items: migratedItems });
+				// Save migrated items back to localStorage
+				if (migratedItems.length > 0) {
+					localStorage.setItem('cart', JSON.stringify({ items: migratedItems }));
+				}
 			} catch (e) {
 				console.error('Error loading cart from localStorage:', e);
 				set({ items: [] });

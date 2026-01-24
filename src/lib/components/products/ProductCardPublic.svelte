@@ -23,12 +23,25 @@
 
 	const toDisplayUrl = (u: string) => (u.startsWith('http') ? u : `${WEBUI_API_BASE_URL}/files/${u}/content`);
 
-	$: imageUrls =
-		item?.image_urls && Array.isArray(item.image_urls)
-			? item.image_urls
-			: item?.image_url
-				? [item.image_url]
-				: [];
+	$: imageUrls = (() => {
+		if (item?.image_urls) {
+			// Handle case where image_urls might be a JSON string (SQLite)
+			let urls = item.image_urls;
+			if (typeof urls === 'string') {
+				try {
+					urls = JSON.parse(urls);
+				} catch (e) {
+					console.warn('Failed to parse image_urls as JSON:', e);
+					urls = null;
+				}
+			}
+			
+			if (Array.isArray(urls)) {
+				return urls.filter(url => url && typeof url === 'string' && url.trim() !== '');
+			}
+		}
+		return [];
+	})();
 
 	$: coverUrl = imageUrls.length > 0 ? toDisplayUrl(imageUrls[0]) : null;
 
@@ -41,7 +54,7 @@
 				name: item.name,
 				price: item.price,
 				currency: item.currency || 'EUR',
-				image_url: imageUrls[0] || item.image_url,
+				image_urls: imageUrls.length > 0 ? imageUrls : undefined,
 				quantity: 1
 			});
 			toast.success($i18n ? $i18n.t('Product added to cart') : 'Product added to cart');

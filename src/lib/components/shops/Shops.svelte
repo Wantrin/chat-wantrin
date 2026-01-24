@@ -189,7 +189,7 @@
 			<Tooltip content={$i18n.t('Add Shop')}>
 				<button
 					class="flex items-center justify-center gap-2 px-6 h-[48px] bg-gradient-to-r from-blue-600 to-orange-600 hover:from-blue-700 hover:to-orange-700 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl font-semibold transform hover:-translate-y-0.5 whitespace-nowrap"
-					on:click={() => goto('/auth-shops/create')}
+					on:click={() => goto('/shop/create')}
 				>
 					<Plus class="w-5 h-5" />
 					<span>{$i18n.t('Add Shop')}</span>

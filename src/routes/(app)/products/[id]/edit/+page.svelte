@@ -112,9 +112,7 @@
 				price = res.price;
 				image_urls = Array.isArray(res.image_urls)
 					? res.image_urls
-					: res.image_url
-						? [res.image_url]
-						: [];
+					: [];
 				imagePreviews = image_urls.map((u) => toDisplayUrl(u));
 				stock = res.stock || 0;
 				category = res.category || '';

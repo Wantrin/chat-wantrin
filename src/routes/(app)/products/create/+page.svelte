@@ -207,7 +207,7 @@
 				<div class="w-full px-4 py-2 border border-red-300 dark:border-red-700 rounded-lg bg-white dark:bg-gray-900 text-red-600 dark:text-red-400">
 					{$i18n.t('No shops available. Please create a shop first.')}
 					<a
-						href="/auth-shops/create"
+						href="/shop/create"
 						class="ml-2 text-blue-600 dark:text-blue-400 hover:underline"
 					>
 						{$i18n.t('Create Shop')}

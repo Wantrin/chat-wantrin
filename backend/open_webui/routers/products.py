@@ -44,7 +44,7 @@ class ProductItemResponse(BaseModel):
     name: str
     description: Optional[str]
     price: float
-    image_url: Optional[str]
+    image_urls: Optional[list[str]] = None
     stock: int
     category: Optional[str]
     updated_at: int

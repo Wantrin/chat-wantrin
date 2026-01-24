@@ -7,6 +7,7 @@
 	import { getProductById } from '$lib/apis/products';
 	import { user } from '$lib/stores';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import ImageCarousel from '$lib/components/common/ImageCarousel.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -22,12 +23,22 @@
 
 	const toDisplayUrl = (u: string) => (u.startsWith('http') ? u : `${WEBUI_API_BASE_URL}/files/${u}/content`);
 
-	$: imageUrls =
-		product?.image_urls && Array.isArray(product.image_urls)
-			? product.image_urls
-			: product?.image_url
-				? [product.image_url]
-				: [];
+	$: imageUrls = (() => {
+		if (product?.image_urls) {
+			let urls = product.image_urls;
+			if (typeof urls === 'string') {
+				try {
+					urls = JSON.parse(urls);
+				} catch (e) {
+					return [];
+				}
+			}
+			if (Array.isArray(urls)) {
+				return urls.filter(url => url && typeof url === 'string' && url.trim() !== '');
+			}
+		}
+		return [];
+	})();
 
 	$: mainImageUrl = imageUrls.length > 0 ? toDisplayUrl(imageUrls[0]) : null;
 
@@ -56,26 +67,14 @@
 {:else if product}
 	<div class="max-w-4xl mx-auto p-6">
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-			<div>
-				{#if mainImageUrl}
-					<img
-						src={mainImageUrl}
-						alt={product.name}
-						class="w-full rounded-lg"
-					/>
-				{:else}
-					<div class="w-full h-96 bg-gray-200 dark:bg-gray-700 flex items-center justify-center rounded-lg">
-						<span class="text-gray-400 dark:text-gray-500">{$i18n.t('No Image')}</span>
-					</div>
-				{/if}
-
-				{#if imageUrls.length > 1}
-					<div class="mt-3 grid grid-cols-4 gap-2">
-						{#each imageUrls.slice(1) as u (u)}
-							<img src={toDisplayUrl(u)} alt="thumb" class="w-full h-20 object-cover rounded-lg" />
-						{/each}
-					</div>
-				{/if}
+			<div class="w-full h-96">
+				<ImageCarousel
+					images={imageUrls}
+					showThumbnails={true}
+					showIndicators={true}
+					showArrows={true}
+					autoPlay={false}
+				/>
 			</div>
 			<div>
 				<h1 class="text-3xl font-bold mb-4">{product.name}</h1>

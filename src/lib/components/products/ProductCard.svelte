@@ -33,14 +33,32 @@
 		}).format(price);
 	};
 
-	const toDisplayUrl = (u: string) => (u.startsWith('http') ? u : `${WEBUI_API_BASE_URL}/files/${u}/content`);
+	const toDisplayUrl = (u: string | null | undefined) => {
+		if (!u) return null;
+		return u.startsWith('http') ? u : `${WEBUI_API_BASE_URL}/files/${u}/content`;
+	};
 
-	$: imageUrls =
-		item?.image_urls && Array.isArray(item.image_urls)
-			? item.image_urls
-			: item?.image_url
-				? [item.image_url]
-				: [];
+	$: imageUrls = (() => {
+		// Use image_urls (array)
+		if (item?.image_urls) {
+			// Handle case where image_urls might be a JSON string (SQLite)
+			let urls = item.image_urls;
+			if (typeof urls === 'string') {
+				try {
+					urls = JSON.parse(urls);
+				} catch (e) {
+					console.warn('Failed to parse image_urls as JSON:', e);
+					urls = null;
+				}
+			}
+			
+			if (Array.isArray(urls)) {
+				const filtered = urls.filter(url => url && typeof url === 'string' && url.trim() !== '');
+				if (filtered.length > 0) return filtered;
+			}
+		}
+		return [];
+	})();
 
 	$: coverUrl = imageUrls.length > 0 ? toDisplayUrl(imageUrls[0]) : null;
 </script>
@@ -49,11 +67,21 @@
 	class="group bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-600 hover:-translate-y-1"
 	role="button"
 	tabindex="0"
-	on:click={() => goto(`/shops/${item.shop_id}/products/${item.id}`)}
+	on:click={() => {
+		if (item.shop_id) {
+			goto(`/shops/${item.shop_id}/products/${item.id}`);
+		} else {
+			goto(`/products/${item.id}`);
+		}
+	}}
 	on:keydown={(e) => {
 		if (e.key === 'Enter' || e.key === ' ') {
 			e.preventDefault();
-			goto(`/shops/${item.shop_id}/products/${item.id}`);
+			if (item.shop_id) {
+				goto(`/shops/${item.shop_id}/products/${item.id}`);
+			} else {
+				goto(`/products/${item.id}`);
+			}
 		}
 	}}
 >

@@ -638,16 +638,6 @@ def is_file_public(file_id: str, db: Session) -> bool:
     if shops:
         return True
     
-    # Check if file is used as product image_url
-    # Public products have access_control = None or "null" (string)
-    products_with_image_url = db.query(Product).filter(
-        Product.image_url == file_id,
-        or_(
-            Product.access_control.is_(None),
-            cast(Product.access_control, String) == "null"
-        )
-    ).all()
-    
     # Check if file is in product image_urls array
     # Handle different database dialects
     if dialect_name == "sqlite":
@@ -709,8 +699,8 @@ def is_file_public(file_id: str, db: Session) -> bool:
                     filtered_products.append(p)
         products_with_image_urls = filtered_products
     
-    # Combine both lists
-    all_products = list(products_with_image_url) + list(products_with_image_urls)
+    # Use products with image_urls
+    all_products = list(products_with_image_urls)
     
     if all_products:
         # Also check if the shop is public

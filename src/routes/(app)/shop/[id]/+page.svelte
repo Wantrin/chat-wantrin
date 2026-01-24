@@ -6,6 +6,8 @@
 	import { toast } from 'svelte-sonner';
 	import { getProductById } from '$lib/apis/products';
 	import { user } from '$lib/stores';
+	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import ImageCarousel from '$lib/components/common/ImageCarousel.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -44,18 +46,19 @@
 {:else if product}
 	<div class="max-w-4xl mx-auto p-6">
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-			<div>
-				{#if product.image_url}
-					<img
-						src={product.image_url}
-						alt={product.name}
-						class="w-full rounded-lg"
-					/>
-				{:else}
-					<div class="w-full h-96 bg-gray-200 dark:bg-gray-700 flex items-center justify-center rounded-lg">
-						<span class="text-gray-400 dark:text-gray-500">{$i18n.t('No Image')}</span>
-					</div>
-				{/if}
+			<div class="w-full h-96">
+				{@const imageUrls = product?.image_urls && Array.isArray(product.image_urls)
+					? product.image_urls
+						.filter(url => url && typeof url === 'string' && url.trim() !== '')
+						.map(url => url.startsWith('http') ? url : `${WEBUI_API_BASE_URL}/files/${url}/content`)
+					: []}
+				<ImageCarousel
+					images={imageUrls}
+					showThumbnails={true}
+					showIndicators={true}
+					showArrows={true}
+					autoPlay={false}
+				/>
 			</div>
 			<div>
 				<h1 class="text-3xl font-bold mb-4">{product.name}</h1>

@@ -32,7 +32,6 @@ class Product(Base):
     name = Column(Text)
     description = Column(Text, nullable=True)
     price = Column(Float)
-    image_url = Column(Text, nullable=True)
     image_urls = Column(JSON, nullable=True)
     stock = Column(BigInteger, default=0)
     category = Column(Text, nullable=True)
@@ -55,7 +54,6 @@ class ProductModel(BaseModel):
     name: str
     description: Optional[str] = None
     price: float
-    image_url: Optional[str] = None
     image_urls: list[str] = []
     stock: int = 0
     category: Optional[str] = None
@@ -77,7 +75,6 @@ class ProductForm(BaseModel):
     name: str
     description: Optional[str] = None
     price: float
-    image_url: Optional[str] = None
     image_urls: Optional[list[str]] = None
     stock: int = 0
     category: Optional[str] = None
@@ -91,7 +88,6 @@ class ProductUpdateForm(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     price: Optional[float] = None
-    image_url: Optional[str] = None
     image_urls: Optional[list[str]] = None
     stock: Optional[int] = None
     category: Optional[str] = None
@@ -110,7 +106,6 @@ class ProductItemResponse(BaseModel):
     name: str
     description: Optional[str]
     price: float
-    image_url: Optional[str]
     image_urls: Optional[list[str]] = None
     stock: int
     category: Optional[str]
@@ -125,12 +120,9 @@ class ProductListResponse(BaseModel):
 
 
 class ProductTable:
-    def _normalize_image_urls(self, image_urls: Optional[list[str]], image_url: Optional[str]) -> list[str]:
-        # Prefer explicit list; fallback to legacy single image_url
+    def _normalize_image_urls(self, image_urls: Optional[list[str]]) -> list[str]:
         if image_urls is not None:
             return [u for u in image_urls if u]
-        if image_url:
-            return [image_url]
         return []
 
     def _has_permission(self, db, query, filter: dict, permission: str = "read"):
@@ -138,6 +130,13 @@ class ProductTable:
         user_id = filter.get("user_id")
         shop_id = filter.get("shop_id")
         dialect_name = db.bind.dialect.name
+
+        # If shop_id is specified, all authenticated users should see ALL products in that shop
+        # The shop_id filter has already been applied in search_products
+        # No need for additional permission filtering when viewing a specific shop
+        if shop_id and user_id:
+            # All authenticated users can see all products in the shop
+            return query
 
         conditions = []
 
@@ -188,7 +187,7 @@ class ProductTable:
         self, user_id: str, form_data: ProductForm, db: Optional[Session] = None
     ) -> Optional[ProductModel]:
         with get_db_context(db) as db:
-            image_urls = self._normalize_image_urls(form_data.image_urls, form_data.image_url)
+            image_urls = self._normalize_image_urls(form_data.image_urls)
             if len(image_urls) == 0:
                 raise ValueError("At least one product image is required")
             product = ProductModel(
@@ -359,9 +358,18 @@ class ProductTable:
             products = []
             for product, user in items:
                 try:
-                    product_model = ProductModel.model_validate(product)
-                except Exception:
-                    # If currency column doesn't exist yet, create a dict without it
+                    # Normalize image_urls - handle JSON string (SQLite) or list
+                    normalized_image_urls = []
+                    if product.image_urls:
+                        if isinstance(product.image_urls, str):
+                            try:
+                                normalized_image_urls = json.loads(product.image_urls)
+                            except (json.JSONDecodeError, TypeError):
+                                normalized_image_urls = []
+                        elif isinstance(product.image_urls, list):
+                            normalized_image_urls = product.image_urls
+                    
+                    # Create a copy of product with normalized image_urls
                     product_dict = {
                         "id": product.id,
                         "user_id": product.user_id,
@@ -369,8 +377,37 @@ class ProductTable:
                         "name": product.name,
                         "description": product.description,
                         "price": product.price,
-                        "image_url": product.image_url,
-                        "image_urls": product.image_urls or [],
+                        "image_urls": normalized_image_urls,
+                        "stock": product.stock or 0,
+                        "category": product.category,
+                        "currency": getattr(product, 'currency', None),
+                        "meta": product.meta,
+                        "access_control": product.access_control,
+                        "created_at": product.created_at,
+                        "updated_at": product.updated_at,
+                    }
+                    product_model = ProductModel(**product_dict)
+                except Exception as e:
+                    # If currency column doesn't exist yet, create a dict without it
+                    # Normalize image_urls here too
+                    normalized_image_urls = []
+                    if product.image_urls:
+                        if isinstance(product.image_urls, str):
+                            try:
+                                normalized_image_urls = json.loads(product.image_urls)
+                            except (json.JSONDecodeError, TypeError):
+                                normalized_image_urls = []
+                        elif isinstance(product.image_urls, list):
+                            normalized_image_urls = product.image_urls
+                    
+                    product_dict = {
+                        "id": product.id,
+                        "user_id": product.user_id,
+                        "shop_id": product.shop_id,
+                        "name": product.name,
+                        "description": product.description,
+                        "price": product.price,
+                        "image_urls": normalized_image_urls,
                         "stock": product.stock or 0,
                         "category": product.category,
                         "currency": getattr(product, 'currency', None),  # Safe access
@@ -438,7 +475,6 @@ class ProductTable:
                     "name": product.name,
                     "description": product.description,
                     "price": product.price,
-                    "image_url": product.image_url,
                     "image_urls": product.image_urls or [],
                     "stock": product.stock or 0,
                     "category": product.category,
@@ -466,8 +502,6 @@ class ProductTable:
                 product.description = form_data["description"]
             if "price" in form_data:
                 product.price = form_data["price"]
-            if "image_url" in form_data:
-                product.image_url = form_data["image_url"]
             if "image_urls" in form_data:
                 # if explicitly provided, it wins; else keep existing
                 product.image_urls = [u for u in (form_data["image_urls"] or []) if u]
@@ -488,10 +522,6 @@ class ProductTable:
             product.updated_at = int(time.time_ns())
 
             db.commit()
-            # Backfill runtime if legacy image_url exists but image_urls missing
-            if (not product.image_urls) and product.image_url:
-                product.image_urls = [product.image_url]
-                db.commit()
             if not product.image_urls:
                 raise ValueError("At least one product image is required")
             return ProductModel.model_validate(product) if product else None

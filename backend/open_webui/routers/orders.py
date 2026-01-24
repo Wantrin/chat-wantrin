@@ -336,10 +336,12 @@ async def get_orders_by_shop_id(
 ):
     """
     Get orders for a specific shop. User must be the shop owner or admin.
+    Supports both shop ID (UUID) and URL slug.
     """
     from open_webui.models.shops import Shops
 
-    shop = Shops.get_shop_by_id(shop_id, db=db)
+    # Support both ID and URL slug
+    shop = Shops.get_shop_by_id_or_url(shop_id, db=db)
     if not shop:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
@@ -357,7 +359,8 @@ async def get_orders_by_shop_id(
         limit = 60
         skip = (page - 1) * limit
 
-    orders = Orders.get_orders_by_shop_id(shop_id, skip=skip, limit=limit, db=db)
+    # Use the actual shop ID (UUID) for querying orders
+    orders = Orders.get_orders_by_shop_id(shop.id, skip=skip, limit=limit, db=db)
     return orders
 
 

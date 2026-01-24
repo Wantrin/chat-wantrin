@@ -11,6 +11,7 @@
 	import { cart } from '$lib/stores/cart';
 	import { toast } from 'svelte-sonner';
 	import Loader from '$lib/components/common/Loader.svelte';
+	import ImageCarousel from '$lib/components/common/ImageCarousel.svelte';
 
 	$: primaryColor = $shopColors.primary || '#3B82F6'; // Default blue
 	$: secondaryColor = $shopColors.secondary || '#F97316'; // Default orange
@@ -20,19 +21,25 @@
 	let product = null;
 	let shop = null;
 	let loading = true;
-	let selectedImageIndex = 0;
 
-	$: productImageUrls = product?.image_urls && Array.isArray(product.image_urls)
-		? product.image_urls
-		: product?.image_url
-			? [product.image_url]
-			: [];
-
-	$: currentImage = productImageUrls[selectedImageIndex]
-		? productImageUrls[selectedImageIndex].startsWith('http')
-			? productImageUrls[selectedImageIndex]
-			: `${WEBUI_API_BASE_URL}/files/${productImageUrls[selectedImageIndex]}/content`
-		: null;
+	$: productImageUrls = (() => {
+		if (product?.image_urls) {
+			let urls = product.image_urls;
+			if (typeof urls === 'string') {
+				try {
+					urls = JSON.parse(urls);
+				} catch (e) {
+					return [];
+				}
+			}
+			if (Array.isArray(urls)) {
+				return urls
+					.filter(url => url && typeof url === 'string' && url.trim() !== '')
+					.map(url => url.startsWith('http') ? url : `${WEBUI_API_BASE_URL}/files/${url}/content`);
+			}
+		}
+		return [];
+	})();
 
 	const formatPrice = (price: number, currency: string = 'EUR') => {
 		return new Intl.NumberFormat('fr-FR', {
@@ -127,39 +134,16 @@
 
 			<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-0">
-					<div class="relative">
-						{#if currentImage}
-							<img
-								src={currentImage}
-								alt={product.name}
-								class="w-full h-full min-h-[500px] object-cover"
+					<div class="p-4">
+						<div class="w-full h-full min-h-[500px]">
+							<ImageCarousel
+								images={productImageUrls}
+								showThumbnails={true}
+								showIndicators={true}
+								showArrows={true}
+								autoPlay={false}
 							/>
-						{:else}
-							<div class="w-full h-full min-h-[500px] bg-gradient-to-br from-blue-400 via-orange-500 to-blue-600 dark:from-blue-600 dark:via-orange-600 dark:to-blue-800 flex items-center justify-center">
-							<span class="text-white text-lg font-medium">{$i18n ? $i18n.t('No Image') : 'No Image'}</span>
 						</div>
-						{/if}
-
-						{#if productImageUrls.length > 1}
-							<div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-								{#each productImageUrls as url, idx}
-									<button
-										on:click={() => {
-											selectedImageIndex = idx;
-										}}
-										class="w-16 h-16 rounded-lg overflow-hidden border-2 {selectedImageIndex === idx
-											? 'border-blue-500'
-											: 'border-gray-300 dark:border-gray-600'}"
-									>
-										<img
-											src={url.startsWith('http') ? url : `${WEBUI_API_BASE_URL}/files/${url}/content`}
-											alt="Thumbnail {idx + 1}"
-											class="w-full h-full object-cover"
-										/>
-									</button>
-								{/each}
-							</div>
-						{/if}
 					</div>
 
 					<div class="p-8 flex flex-col">
@@ -220,7 +204,7 @@
 											name: product.name,
 											price: product.price,
 											currency: product.currency || 'EUR',
-											image_url: productImageUrls[0] || product.image_url,
+											image_urls: productImageUrls.length > 0 ? productImageUrls : undefined,
 											quantity: 1
 										});
 										toast.success($i18n ? $i18n.t('Product added to cart') : 'Product added to cart');

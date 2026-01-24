@@ -119,6 +119,8 @@
 				return;
 			}
 
+			console.log('Searching products with shopId:', shopId, 'query:', query, 'category:', category, 'currency:', currency);
+
 			const res = await searchProducts(
 				token,
 				query || null,
@@ -200,12 +202,13 @@
 
 	// Unified reactive statement to prevent duplicate calls
 	// Watch all relevant variables to trigger init when any change
-	$: if (loaded && typeof window !== 'undefined' && (query !== undefined || category !== undefined || currency !== undefined || sortKey !== undefined || viewOption !== undefined || shopId !== undefined)) {
+	$: if (loaded && typeof window !== 'undefined' && (query !== undefined || category !== undefined || currency !== undefined || sortKey !== undefined || viewOption !== undefined || shopId !== undefined || shopId !== null)) {
 		// Debounce init calls to prevent duplicate API requests
 		if (initTimeout) {
 			clearTimeout(initTimeout);
 		}
 		initTimeout = setTimeout(() => {
+			console.log('Reactive trigger: shopId changed to', shopId);
 			init();
 		}, 150);
 	}
