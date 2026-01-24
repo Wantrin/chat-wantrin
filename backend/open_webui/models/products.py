@@ -144,12 +144,18 @@ class ProductTable:
         # Public access conditions - always show public products
         # If shop_id is specified, show all public products in that shop
         # Otherwise, show public products that user can access
-        conditions.extend(
-            [
-                Product.access_control.is_(None),
-                cast(Product.access_control, String) == "null",
-            ]
-        )
+        # Products are public if access_control is None, "null", or empty dict {}
+        public_conditions = [
+            Product.access_control.is_(None),
+            cast(Product.access_control, String) == "null",
+        ]
+        # Also check for empty JSON objects (SQLite stores as string, PostgreSQL as JSONB)
+        if dialect_name == "sqlite":
+            public_conditions.append(cast(Product.access_control, String) == "{}")
+        elif dialect_name == "postgresql":
+            # For PostgreSQL, check if access_control is empty JSONB object
+            public_conditions.append(cast(Product.access_control, JSONB) == {})
+        conditions.extend(public_conditions)
 
         # User-level permission (owner has all permissions)
         if user_id:
@@ -223,6 +229,7 @@ class ProductTable:
         db: Optional[Session] = None,
     ) -> ProductListResponse:
         with get_db_context(db) as db:
+            from open_webui.models.shops import Shop
             query = db.query(Product, User).outerjoin(User, User.id == Product.user_id)
             if filter:
                 query_key = filter.get("query")
@@ -250,7 +257,16 @@ class ProductTable:
 
                 shop_id = filter.get("shop_id")
                 if shop_id:
-                    query = query.filter(Product.shop_id == shop_id)
+                    # shop_id can be either a UUID or a URL slug
+                    # Try to resolve it to an actual shop ID
+                    from open_webui.models.shops import Shops
+                    shop = Shops.get_shop_by_id_or_url(shop_id, db=db)
+                    if shop:
+                        # Use the actual shop ID (UUID) for filtering
+                        query = query.filter(Product.shop_id == shop.id)
+                    else:
+                        # If shop not found, return empty result
+                        query = query.filter(Product.id == "")  # This will never match
 
                 view_option = filter.get("view_option")
                 if view_option == "created" and user_id:
@@ -266,12 +282,31 @@ class ProductTable:
                 else:
                     permission = "read"
 
-                # For public access (user_id is None), only show public products
+                # For public access (user_id is None), only show public products from public shops
                 if user_id is None:
+                    # Use exists() to check that the shop is public
+                    public_shop_exists = exists(
+                        select(1).where(
+                            and_(
+                                Shop.id == Product.shop_id,
+                                Shop.is_public == True
+                            )
+                        )
+                    )
+                    # Build public access conditions (None, "null", or empty {})
+                    dialect_name = db.bind.dialect.name
+                    public_access_conditions = [
+                        Product.access_control.is_(None),
+                        cast(Product.access_control, String) == "null",
+                    ]
+                    if dialect_name == "sqlite":
+                        public_access_conditions.append(cast(Product.access_control, String) == "{}")
+                    elif dialect_name == "postgresql":
+                        public_access_conditions.append(cast(Product.access_control, JSONB) == {})
                     query = query.filter(
-                        or_(
-                            Product.access_control.is_(None),
-                            cast(Product.access_control, String) == "null",
+                        and_(
+                            or_(*public_access_conditions),
+                            public_shop_exists  # Only show products from public shops
                         )
                     )
                 else:
