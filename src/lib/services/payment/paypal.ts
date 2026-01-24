@@ -1,4 +1,5 @@
 import type { PaymentIntent, PaymentResult } from './types';
+import { createPayPalOrder, confirmPayPalPayment } from '$lib/apis/payments';
 
 /**
  * PayPal Payment Service
@@ -48,49 +49,64 @@ export class PayPalPaymentService {
 	}
 
 	async createPayment(amount: number, currency: string, orderId: string): Promise<PaymentResult> {
+		try {
+			const response = await createPayPalOrder(orderId);
+			return {
+				success: true,
+				transactionId: response.order_id
+			};
+		} catch (error: any) {
+			return {
+				success: false,
+				error: error || 'Failed to create PayPal payment'
+			};
+		}
+	}
+
+	async createPayPalButton(
+		orderId: string,
+		onSuccess: (orderId: string) => void,
+		onError: (error: string) => void
+	): Promise<void> {
 		await this.loadPayPalScript();
 
 		if (!window.paypal) {
-			return {
-				success: false,
-				error: 'PayPal SDK not loaded'
-			};
+			onError('PayPal SDK not loaded');
+			return;
 		}
 
-		// This is a simplified example
-		// In production, you should create the payment on your backend
-		return new Promise((resolve) => {
+		// Create PayPal order via backend
+		try {
+			const paypalOrder = await createPayPalOrder(orderId);
+			
 			window.paypal
 				.Buttons({
-					createOrder: (data: any, actions: any) => {
-						return actions.order.create({
-							purchase_units: [
-								{
-									amount: {
-										value: amount.toString(),
-										currency_code: currency
-									},
-									reference_id: orderId
-								}
-							]
-						});
+					createOrder: () => {
+						return paypalOrder.order_id;
 					},
-					onApprove: (data: any, actions: any) => {
-						return actions.order.capture().then((details: any) => {
-							resolve({
-								success: true,
-								transactionId: details.id
-							});
-						});
+					onApprove: async (data: any, actions: any) => {
+						try {
+							// Confirm payment via backend
+							await confirmPayPalPayment(
+								paypalOrder.order_id,
+								orderId,
+								data.payerID
+							);
+							onSuccess(orderId);
+						} catch (error: any) {
+							onError(error || 'Failed to confirm payment');
+						}
 					},
 					onError: (err: any) => {
-						resolve({
-							success: false,
-							error: err.message || 'PayPal payment failed'
-						});
+						onError(err.message || 'PayPal payment failed');
+					},
+					onCancel: () => {
+						onError('Payment cancelled');
 					}
 				})
 				.render('#paypal-button-container');
-		});
+		} catch (error: any) {
+			onError(error || 'Failed to initialize PayPal payment');
+		}
 	}
 }

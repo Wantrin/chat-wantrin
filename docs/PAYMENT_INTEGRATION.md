@@ -176,13 +176,51 @@ async def stripe_webhook(request: Request):
 - Vérifier les signatures des webhooks
 - Ne jamais faire confiance aux données client pour les montants
 
-## Prochaines Étapes
+## Dépendances Python
 
-1. **Implémenter les endpoints backend** pour créer les payment intents
-2. **Configurer les webhooks** pour recevoir les notifications
-3. **Ajouter l'UI de paiement** dans la page de checkout
-4. **Tester en mode sandbox** avant de passer en production
-5. **Ajouter la gestion des erreurs** et des remboursements
+Pour utiliser les intégrations de paiement, installez les dépendances suivantes :
+
+```bash
+pip install stripe
+pip install paypalrestsdk
+```
+
+Ou ajoutez-les à votre fichier `requirements.txt` :
+
+```
+stripe>=5.0.0
+paypalrestsdk>=1.13.0
+```
+
+## Variables d'Environnement Frontend
+
+Pour le frontend, ajoutez ces variables dans votre fichier `.env` ou configurez-les dans votre build :
+
+```env
+VITE_STRIPE_PUBLIC_KEY=pk_test_...
+VITE_PAYPAL_CLIENT_ID=your-paypal-client-id
+VITE_PAYPAL_MODE=sandbox  # ou 'live' pour la production
+```
+
+## État d'Implémentation
+
+✅ **Terminé** :
+1. Endpoints backend pour Stripe (créer payment intent, webhook)
+2. Endpoints backend pour PayPal (créer order, webhook)
+3. Variables d'environnement configurées
+4. Fonctions API frontend créées
+5. UI de paiement intégrée dans le checkout
+6. Sélection du moyen de paiement (Stripe, PayPal, Manuel)
+7. Intégration Stripe Elements
+8. Flux de commande avec gestion des paiements
+
+## Prochaines Étapes (Optionnel)
+
+1. **Améliorer la gestion PayPal** : Utiliser l'API REST PayPal directement au lieu de paypalrestsdk
+2. **Ajouter plus de méthodes de paiement** : Apple Pay, Google Pay, etc.
+3. **Améliorer la gestion des erreurs** et des remboursements
+4. **Ajouter des tests** pour les intégrations de paiement
+5. **Configurer les webhooks en production** avec vérification complète des signatures
 
 ## Ressources
 

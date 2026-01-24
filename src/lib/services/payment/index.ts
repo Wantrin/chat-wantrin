@@ -46,11 +46,11 @@ export class PaymentService {
 						error: 'Stripe not configured'
 					};
 				}
-				// For Stripe, you would first create a payment intent on the backend
-				// then use the client secret here
+				// Stripe payment intent creation is handled separately
+				// This method is kept for compatibility but should use createPaymentIntent + processPayment
 				return {
 					success: false,
-					error: 'Stripe payment processing requires backend integration'
+					error: 'Use createPaymentIntent and processPayment methods for Stripe'
 				};
 
 			case 'paypal':
@@ -76,6 +76,34 @@ export class PaymentService {
 					error: 'Unknown payment provider'
 				};
 		}
+	}
+
+	async createStripePaymentIntent(
+		amount: number,
+		currency: string,
+		orderId: string
+	): Promise<{ clientSecret: string; paymentIntentId: string } | null> {
+		if (this.config.provider !== 'stripe' || !this.stripeService) {
+			return null;
+		}
+		const intent = await this.stripeService.createPaymentIntent(amount, currency, orderId);
+		return {
+			clientSecret: intent.clientSecret || '',
+			paymentIntentId: intent.id
+		};
+	}
+
+	async processStripePayment(
+		clientSecret: string,
+		paymentMethodId: string
+	): Promise<PaymentResult> {
+		if (this.config.provider !== 'stripe' || !this.stripeService) {
+			return {
+				success: false,
+				error: 'Stripe not configured'
+			};
+		}
+		return await this.stripeService.processPayment(clientSecret, paymentMethodId);
 	}
 
 	getProvider(): PaymentProvider {

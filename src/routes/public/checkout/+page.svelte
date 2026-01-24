@@ -8,6 +8,8 @@
 	import { createNewOrder } from '$lib/apis/orders';
 	import { getPublicShopById } from '$lib/apis/shops';
 	import { shopColors } from '$lib/stores/shopColors';
+	import { PaymentService } from '$lib/services/payment';
+	import type { PaymentProvider } from '$lib/services/payment/types';
 	import Loader from '$lib/components/common/Loader.svelte';
 
 	const i18n = getContext('i18n');
@@ -16,6 +18,7 @@
 	let cartItems = [];
 	let loading = false;
 	let submitting = false;
+	let processingPayment = false;
 
 	$: primaryColor = $shopColors.primary || shop?.primary_color || '#3B82F6'; // Default blue
 	$: secondaryColor = $shopColors.secondary || shop?.secondary_color || '#F97316'; // Default orange
@@ -31,6 +34,13 @@
 	let state = '';
 	let shippingCost = 0;
 	let notes = '';
+
+	// Payment
+	let selectedPaymentMethod: PaymentProvider = 'manual';
+	let stripeElements: any = null;
+	let stripeCardElement: any = null;
+	let paymentService: PaymentService | null = null;
+	let currentOrder: any = null;
 
 	$: shopId = $page.url.searchParams.get('shop_id');
 	$: filteredItems = shopId
@@ -77,71 +87,272 @@
 		}
 	};
 
-	const submitOrder = async () => {
+	const initializeStripe = async () => {
+		if (typeof window === 'undefined' || selectedPaymentMethod !== 'stripe') return;
+
+		const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || '';
+		if (!stripePublicKey) {
+			console.warn('Stripe public key not configured');
+			return;
+		}
+
+		try {
+			// Load Stripe.js
+			if (!window.Stripe) {
+				const script = document.createElement('script');
+				script.src = 'https://js.stripe.com/v3/';
+				script.async = true;
+				await new Promise((resolve, reject) => {
+					script.onload = resolve;
+					script.onerror = reject;
+					document.head.appendChild(script);
+				});
+			}
+
+			if (window.Stripe) {
+				stripeElements = window.Stripe(stripePublicKey);
+				const elements = stripeElements.elements();
+				const cardElement = elements.create('card', {
+					style: {
+						base: {
+							fontSize: '16px',
+							color: '#32325d',
+							'::placeholder': {
+								color: '#aab7c4'
+							}
+						},
+						invalid: {
+							color: '#fa755a',
+							iconColor: '#fa755a'
+						}
+					}
+				});
+				cardElement.mount('#stripe-card-element');
+				stripeCardElement = cardElement;
+			}
+		} catch (error) {
+			console.error('Error initializing Stripe:', error);
+		}
+	};
+
+	const initializePayPal = async () => {
+		if (typeof window === 'undefined' || selectedPaymentMethod !== 'paypal') return;
+
+		const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || '';
+		if (!paypalClientId) {
+			console.warn('PayPal client ID not configured');
+			return;
+		}
+
+		try {
+			// PayPal button will be rendered when order is created
+		} catch (error) {
+			console.error('Error initializing PayPal:', error);
+		}
+	};
+
+	const createOrder = async () => {
 		if (!shopId || filteredItems.length === 0) {
 			toast.error($i18n ? $i18n.t('Invalid order') : 'Invalid order');
-			return;
+			return null;
 		}
 
 		// Validation
 		if (!customerName.trim()) {
 			toast.error($i18n ? $i18n.t('Name is required') : 'Name is required');
-			return;
+			return null;
 		}
 		if (!customerEmail.trim() || !customerEmail.includes('@')) {
 			toast.error($i18n ? $i18n.t('Valid email is required') : 'Valid email is required');
-			return;
+			return null;
 		}
 		if (!street.trim() || !city.trim() || !postalCode.trim() || !country.trim()) {
 			toast.error($i18n ? $i18n.t('Complete shipping address is required') : 'Complete shipping address is required');
-			return;
+			return null;
 		}
 
-		submitting = true;
-		try {
-			const token = typeof window !== 'undefined' ? localStorage.token || null : null;
+		const token = typeof window !== 'undefined' ? localStorage.token || null : null;
 
-			const orderData = {
-				shop_id: shopId,
-				customer_name: customerName.trim(),
-				customer_email: customerEmail.trim(),
-				customer_phone: customerPhone.trim() || undefined,
-				shipping_address: {
-					street: street.trim(),
-					city: city.trim(),
-					postal_code: postalCode.trim(),
-					country: country.trim(),
-					state: state.trim() || undefined
-				},
-				items: filteredItems.map((item) => ({
-					product_id: item.product_id,
-					name: item.name,
-					price: item.price,
-					quantity: item.quantity,
-					currency: item.currency
-				})),
-				shipping_cost: shippingCost,
-				notes: notes.trim() || undefined
-			};
-
-			const order = await createNewOrder(token || '', orderData);
-
-			if (order) {
-				// Remove ordered items from cart
-				filteredItems.forEach((item) => {
-					cart.removeItem(item.product_id);
-				});
-
-				toast.success($i18n ? $i18n.t('Order placed successfully!') : 'Order placed successfully!');
-				goto(`/public/orders/${order.id}`);
+		const orderData = {
+			shop_id: shopId,
+			customer_name: customerName.trim(),
+			customer_email: customerEmail.trim(),
+			customer_phone: customerPhone.trim() || undefined,
+			shipping_address: {
+				street: street.trim(),
+				city: city.trim(),
+				postal_code: postalCode.trim(),
+				country: country.trim(),
+				state: state.trim() || undefined
+			},
+			items: filteredItems.map((item) => ({
+				product_id: item.product_id,
+				name: item.name,
+				price: item.price,
+				quantity: item.quantity,
+				currency: item.currency
+			})),
+			shipping_cost: shippingCost,
+			notes: notes.trim() || undefined,
+			meta: {
+				payment_method: selectedPaymentMethod
 			}
+		};
+
+		try {
+			const order = await createNewOrder(token || '', orderData);
+			return order;
 		} catch (error) {
 			console.error('Error creating order:', error);
 			toast.error(`${error}`);
-		} finally {
-			submitting = false;
+			return null;
 		}
 	};
+
+	const processStripePayment = async (order: any) => {
+		if (!stripeElements || !stripeCardElement) {
+			toast.error('Stripe not initialized');
+			return false;
+		}
+
+		try {
+			// Create payment intent
+			const paymentService = new PaymentService({
+				provider: 'stripe',
+				stripe: {
+					publicKey: import.meta.env.VITE_STRIPE_PUBLIC_KEY || ''
+				}
+			});
+
+			const intent = await paymentService.createStripePaymentIntent(
+				total,
+				currency,
+				order.id
+			);
+
+			if (!intent || !intent.clientSecret) {
+				toast.error('Failed to create payment intent');
+				return false;
+			}
+
+			// Confirm payment with card
+			const { error, paymentIntent } = await stripeElements.confirmCardPayment(
+				intent.clientSecret,
+				{
+					payment_method: {
+						card: stripeCardElement,
+						billing_details: {
+							name: customerName,
+							email: customerEmail,
+							phone: customerPhone || undefined,
+							address: {
+								line1: street,
+								city: city,
+								postal_code: postalCode,
+								country: country,
+								state: state || undefined
+							}
+						}
+					}
+				}
+			);
+
+			if (error) {
+				toast.error(error.message || 'Payment failed');
+				return false;
+			}
+
+			if (paymentIntent && paymentIntent.status === 'succeeded') {
+				return true;
+			}
+
+			return false;
+		} catch (error: any) {
+			console.error('Error processing Stripe payment:', error);
+			toast.error(error.message || 'Payment processing failed');
+			return false;
+		}
+	};
+
+	const processPayPalPayment = async (order: any) => {
+		try {
+			const paymentService = new PaymentService({
+				provider: 'paypal',
+				paypal: {
+					clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || '',
+					mode: (import.meta.env.VITE_PAYPAL_MODE || 'sandbox') as 'sandbox' | 'live'
+				}
+			});
+
+			// PayPal payment is handled via redirect
+			// The button will be rendered and handle the flow
+			return new Promise((resolve) => {
+				// This will be handled by the PayPal button
+				// For now, we'll just return true and let the button handle it
+				resolve(true);
+			});
+		} catch (error: any) {
+			console.error('Error processing PayPal payment:', error);
+			toast.error(error.message || 'Payment processing failed');
+			return false;
+		}
+	};
+
+	const submitOrder = async () => {
+		if (submitting || processingPayment) return;
+
+		submitting = true;
+		try {
+			// Create order first
+			const order = await createOrder();
+			if (!order) {
+				submitting = false;
+				return;
+			}
+
+			currentOrder = order;
+
+			// Process payment based on selected method
+			if (selectedPaymentMethod === 'stripe') {
+				processingPayment = true;
+				const paymentSuccess = await processStripePayment(order);
+				processingPayment = false;
+
+				if (!paymentSuccess) {
+					submitting = false;
+					return;
+				}
+			} else if (selectedPaymentMethod === 'paypal') {
+				// PayPal will be handled via button click
+				// Don't submit yet, wait for PayPal confirmation
+				submitting = false;
+				return;
+			}
+
+			// Payment successful or manual payment
+			// Remove ordered items from cart
+			filteredItems.forEach((item) => {
+				cart.removeItem(item.product_id);
+			});
+
+			toast.success($i18n ? $i18n.t('Order placed successfully!') : 'Order placed successfully!');
+			goto(`/public/orders/${order.id}`);
+		} catch (error) {
+			console.error('Error submitting order:', error);
+			toast.error(`${error}`);
+		} finally {
+			submitting = false;
+			processingPayment = false;
+		}
+	};
+
+	$: if (selectedPaymentMethod === 'stripe') {
+		setTimeout(() => initializeStripe(), 100);
+	}
+
+	$: if (selectedPaymentMethod === 'paypal') {
+		setTimeout(() => initializePayPal(), 100);
+	}
 
 	onMount(() => {
 		cart.subscribe((c) => {
@@ -174,8 +385,9 @@
 			</h1>
 
 			<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-				<div class="lg:col-span-2">
-					<div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+				<div class="lg:col-span-2 space-y-6">
+					<!-- Shipping Information -->
+					<div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
 						<h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">
 							{$i18n ? $i18n.t('Shipping Information') : 'Shipping Information'}
 						</h2>
@@ -293,15 +505,15 @@
 										type="text"
 										bind:value={city}
 										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
-									style="--focus-ring-color: {primaryColor};"
-									on:focus={(e) => {
-										e.currentTarget.style.borderColor = primaryColor;
-										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
-									}}
-									on:blur={(e) => {
-										e.currentTarget.style.borderColor = '';
-										e.currentTarget.style.boxShadow = '';
-									}}
+										style="--focus-ring-color: {primaryColor};"
+										on:focus={(e) => {
+											e.currentTarget.style.borderColor = primaryColor;
+											e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+										}}
+										on:blur={(e) => {
+											e.currentTarget.style.borderColor = '';
+											e.currentTarget.style.boxShadow = '';
+										}}
 										required
 									/>
 								</div>
@@ -318,15 +530,15 @@
 										type="text"
 										bind:value={postalCode}
 										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
-									style="--focus-ring-color: {primaryColor};"
-									on:focus={(e) => {
-										e.currentTarget.style.borderColor = primaryColor;
-										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
-									}}
-									on:blur={(e) => {
-										e.currentTarget.style.borderColor = '';
-										e.currentTarget.style.boxShadow = '';
-									}}
+										style="--focus-ring-color: {primaryColor};"
+										on:focus={(e) => {
+											e.currentTarget.style.borderColor = primaryColor;
+											e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+										}}
+										on:blur={(e) => {
+											e.currentTarget.style.borderColor = '';
+											e.currentTarget.style.boxShadow = '';
+										}}
 										required
 									/>
 								</div>
@@ -345,15 +557,15 @@
 										type="text"
 										bind:value={country}
 										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
-									style="--focus-ring-color: {primaryColor};"
-									on:focus={(e) => {
-										e.currentTarget.style.borderColor = primaryColor;
-										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
-									}}
-									on:blur={(e) => {
-										e.currentTarget.style.borderColor = '';
-										e.currentTarget.style.boxShadow = '';
-									}}
+										style="--focus-ring-color: {primaryColor};"
+										on:focus={(e) => {
+											e.currentTarget.style.borderColor = primaryColor;
+											e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+										}}
+										on:blur={(e) => {
+											e.currentTarget.style.borderColor = '';
+											e.currentTarget.style.boxShadow = '';
+										}}
 										required
 									/>
 								</div>
@@ -370,15 +582,15 @@
 										type="text"
 										bind:value={state}
 										class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
-									style="--focus-ring-color: {primaryColor};"
-									on:focus={(e) => {
-										e.currentTarget.style.borderColor = primaryColor;
-										e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
-									}}
-									on:blur={(e) => {
-										e.currentTarget.style.borderColor = '';
-										e.currentTarget.style.boxShadow = '';
-									}}
+										style="--focus-ring-color: {primaryColor};"
+										on:focus={(e) => {
+											e.currentTarget.style.borderColor = primaryColor;
+											e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}40`;
+										}}
+										on:blur={(e) => {
+											e.currentTarget.style.borderColor = '';
+											e.currentTarget.style.boxShadow = '';
+										}}
 									/>
 								</div>
 							</div>
@@ -406,6 +618,88 @@
 									}}
 								></textarea>
 							</div>
+						</div>
+					</div>
+
+					<!-- Payment Method Selection -->
+					<div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+						<h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">
+							{$i18n ? $i18n.t('Payment Method') : 'Payment Method'}
+						</h2>
+
+						<div class="space-y-4">
+							<label class="flex items-center p-4 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition {selectedPaymentMethod === 'manual' ? 'border-2' : ''}"
+								style="{selectedPaymentMethod === 'manual' ? `border-color: ${primaryColor}` : ''}">
+								<input
+									type="radio"
+									name="payment"
+									value="manual"
+									bind:group={selectedPaymentMethod}
+									class="mr-3"
+								/>
+								<div class="flex-1">
+									<div class="font-semibold text-gray-900 dark:text-gray-100">
+										{$i18n ? $i18n.t('Manual Payment') : 'Manual Payment'}
+									</div>
+									<div class="text-sm text-gray-600 dark:text-gray-400">
+										{$i18n ? $i18n.t('Bank transfer, cash on delivery, etc.') : 'Bank transfer, cash on delivery, etc.'}
+									</div>
+								</div>
+							</label>
+
+							<label class="flex items-center p-4 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition {selectedPaymentMethod === 'stripe' ? 'border-2' : ''}"
+								style="{selectedPaymentMethod === 'stripe' ? `border-color: ${primaryColor}` : ''}">
+								<input
+									type="radio"
+									name="payment"
+									value="stripe"
+									bind:group={selectedPaymentMethod}
+									class="mr-3"
+								/>
+								<div class="flex-1">
+									<div class="font-semibold text-gray-900 dark:text-gray-100">
+										{$i18n ? $i18n.t('Credit Card') : 'Credit Card'} (Stripe)
+									</div>
+									<div class="text-sm text-gray-600 dark:text-gray-400">
+										{$i18n ? $i18n.t('Pay securely with your credit card') : 'Pay securely with your credit card'}
+									</div>
+								</div>
+							</label>
+
+							{#if selectedPaymentMethod === 'stripe'}
+								<div class="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+									<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+										{$i18n ? $i18n.t('Card Details') : 'Card Details'}
+									</label>
+									<div id="stripe-card-element" class="p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"></div>
+									<div id="stripe-card-errors" class="mt-2 text-sm text-red-600 dark:text-red-400"></div>
+								</div>
+							{/if}
+
+							<label class="flex items-center p-4 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition {selectedPaymentMethod === 'paypal' ? 'border-2' : ''}"
+								style="{selectedPaymentMethod === 'paypal' ? `border-color: ${primaryColor}` : ''}">
+								<input
+									type="radio"
+									name="payment"
+									value="paypal"
+									bind:group={selectedPaymentMethod}
+									class="mr-3"
+								/>
+								<div class="flex-1">
+									<div class="font-semibold text-gray-900 dark:text-gray-100">
+										PayPal
+									</div>
+									<div class="text-sm text-gray-600 dark:text-gray-400">
+										{$i18n ? $i18n.t('Pay with your PayPal account') : 'Pay with your PayPal account'}
+									</div>
+								</div>
+							</label>
+
+							{#if selectedPaymentMethod === 'paypal'}
+								<div class="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+									<div id="paypal-button-container"></div>
+								</div>
+							{/if}
 						</div>
 					</div>
 				</div>
@@ -446,24 +740,28 @@
 							</div>
 						</div>
 
-						<button
-							on:click={submitOrder}
-							disabled={submitting}
-							class="w-full px-6 py-3 text-white rounded-lg transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-							style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%);"
-							on:mouseenter={(e) => {
-								if (!submitting) {
-									e.currentTarget.style.opacity = '0.9';
-								}
-							}}
-							on:mouseleave={(e) => {
-								e.currentTarget.style.opacity = '1';
-							}}
-						>
-							{submitting
-								? ($i18n ? $i18n.t('Placing Order...') : 'Placing Order...')
-								: ($i18n ? $i18n.t('Place Order') : 'Place Order')}
-						</button>
+						{#if selectedPaymentMethod !== 'paypal'}
+							<button
+								on:click={submitOrder}
+								disabled={submitting || processingPayment}
+								class="w-full px-6 py-3 text-white rounded-lg transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+								style="background: linear-gradient(to right, {primaryColor} 0%, {secondaryColor} 100%);"
+								on:mouseenter={(e) => {
+									if (!submitting && !processingPayment) {
+										e.currentTarget.style.opacity = '0.9';
+									}
+								}}
+								on:mouseleave={(e) => {
+									e.currentTarget.style.opacity = '1';
+								}}
+							>
+								{processingPayment
+									? ($i18n ? $i18n.t('Processing Payment...') : 'Processing Payment...')
+									: submitting
+										? ($i18n ? $i18n.t('Placing Order...') : 'Placing Order...')
+										: ($i18n ? $i18n.t('Place Order') : 'Place Order')}
+							</button>
+						{/if}
 					</div>
 				</div>
 			</div>

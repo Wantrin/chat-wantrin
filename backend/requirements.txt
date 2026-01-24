@@ -152,3 +152,7 @@ opentelemetry-instrumentation-requests==0.60b1
 opentelemetry-instrumentation-logging==0.60b1
 opentelemetry-instrumentation-httpx==0.60b1
 opentelemetry-instrumentation-aiohttp-client==0.60b1
+
+## Payment Integration
+stripe>=5.0.0
+paypalrestsdk>=1.13.0

@@ -1,4 +1,5 @@
 import type { PaymentIntent, PaymentResult } from './types';
+import { createStripePaymentIntent } from '$lib/apis/payments';
 
 /**
  * Stripe Payment Service
@@ -65,9 +66,18 @@ export class StripePaymentService {
 		currency: string,
 		orderId: string
 	): Promise<PaymentIntent> {
-		// This should call your backend API to create a payment intent
-		// For now, this is a placeholder
-		throw new Error('Backend API endpoint for creating payment intent not implemented');
+		try {
+			const response = await createStripePaymentIntent(orderId);
+			return {
+				id: response.payment_intent_id,
+				amount,
+				currency,
+				status: 'pending',
+				clientSecret: response.client_secret
+			};
+		} catch (error: any) {
+			throw new Error(error || 'Failed to create payment intent');
+		}
 	}
 
 	async processPayment(
