@@ -72,6 +72,8 @@ from open_webui.routers import (
     images,
     ollama,
     openai,
+    gemini,
+    twilio,
     retrieval,
     pipelines,
     tasks,
@@ -127,6 +129,14 @@ from open_webui.config import (
     OPENAI_API_BASE_URLS,
     OPENAI_API_KEYS,
     OPENAI_API_CONFIGS,
+    # Gemini
+    GEMINI_API_KEY,
+    GEMINI_API_BASE_URL,
+    # Twilio
+    TWILIO_ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN,
+    TWILIO_PHONE_NUMBER,
+    ENABLE_TWILIO,
     # Direct Connections
     ENABLE_DIRECT_CONNECTIONS,
     # Model list
@@ -723,6 +733,26 @@ app.state.config.OPENAI_API_KEYS = OPENAI_API_KEYS
 app.state.config.OPENAI_API_CONFIGS = OPENAI_API_CONFIGS
 
 app.state.OPENAI_MODELS = {}
+
+########################################
+#
+# GEMINI
+#
+########################################
+
+app.state.config.GEMINI_API_KEY = GEMINI_API_KEY
+app.state.config.GEMINI_API_BASE_URL = GEMINI_API_BASE_URL
+
+########################################
+#
+# TWILIO
+#
+########################################
+
+app.state.config.TWILIO_ACCOUNT_SID = TWILIO_ACCOUNT_SID
+app.state.config.TWILIO_AUTH_TOKEN = TWILIO_AUTH_TOKEN
+app.state.config.TWILIO_PHONE_NUMBER = TWILIO_PHONE_NUMBER
+app.state.config.ENABLE_TWILIO = ENABLE_TWILIO
 
 ########################################
 #
@@ -1499,6 +1529,8 @@ app.mount("/ws", socket_app)
 
 app.include_router(ollama.router, prefix="/ollama", tags=["ollama"])
 app.include_router(openai.router, prefix="/openai", tags=["openai"])
+app.include_router(gemini.router, prefix="/gemini", tags=["gemini"])
+app.include_router(twilio.router, prefix="/twilio", tags=["twilio"])
 
 
 app.include_router(pipelines.router, prefix="/api/v1/pipelines", tags=["pipelines"])

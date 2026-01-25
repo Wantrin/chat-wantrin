@@ -6,6 +6,8 @@
 
 	import { getOllamaConfig, updateOllamaConfig } from '$lib/apis/ollama';
 	import { getOpenAIConfig, updateOpenAIConfig, getOpenAIModels } from '$lib/apis/openai';
+	import { getGeminiConfig, updateGeminiConfig } from '$lib/apis/gemini';
+	import { getTwilioConfig, updateTwilioConfig } from '$lib/apis/twilio';
 	import { getModels as _getModels, getBackendConfig } from '$lib/apis';
 	import { getConnectionsConfig, setConnectionsConfig } from '$lib/apis/configs';
 
@@ -19,6 +21,8 @@
 	import OpenAIConnection from './Connections/OpenAIConnection.svelte';
 	import AddConnectionModal from '$lib/components/AddConnectionModal.svelte';
 	import OllamaConnection from './Connections/OllamaConnection.svelte';
+	import GeminiConnection from './Connections/GeminiConnection.svelte';
+	import TwilioConnection from './Connections/TwilioConnection.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -40,6 +44,14 @@
 	let OPENAI_API_BASE_URLS = [''];
 	let OPENAI_API_CONFIGS = {};
 
+	let GEMINI_API_KEY: string | undefined = undefined;
+	let GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com';
+
+	let TWILIO_ACCOUNT_SID = '';
+	let TWILIO_AUTH_TOKEN = '';
+	let TWILIO_PHONE_NUMBER = '';
+	let ENABLE_TWILIO = false;
+
 	let ENABLE_OPENAI_API: null | boolean = null;
 	let ENABLE_OLLAMA_API: null | boolean = null;
 
@@ -49,7 +61,7 @@
 	let showAddOpenAIConnectionModal = false;
 	let showAddOllamaConnectionModal = false;
 
-	const updateOpenAIHandler = async () => {
+	const updateOpenAIHandler = async (showToast: boolean = true) => {
 		if (ENABLE_OPENAI_API !== null) {
 			// Remove trailing slashes
 			OPENAI_API_BASE_URLS = OPENAI_API_BASE_URLS.map((url) => url.replace(/\/$/, ''));
@@ -77,13 +89,18 @@
 				OPENAI_API_CONFIGS: OPENAI_API_CONFIGS
 			}).catch((error) => {
 				toast.error(`${error}`);
+				return null;
 			});
 
 			if (res) {
-				toast.success($i18n.t('OpenAI API settings updated'));
+				if (showToast) {
+					toast.success($i18n.t('OpenAI API settings updated'));
+				}
 				await models.set(await getModels());
+				return true;
 			}
 		}
+		return false;
 	};
 
 	const updateOllamaHandler = async () => {
@@ -104,6 +121,88 @@
 				await models.set(await getModels());
 			}
 		}
+	};
+
+	const updateGeminiHandler = async (showToast: boolean = true) => {
+		// Remove trailing slashes
+		const baseUrl = GEMINI_API_BASE_URL.replace(/\/$/, '');
+
+		const res = await updateGeminiConfig(localStorage.token, {
+			GEMINI_API_KEY: GEMINI_API_KEY,
+			GEMINI_API_BASE_URL: baseUrl
+		}).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+
+		if (res) {
+			// Reload the Gemini config to ensure we have the latest value
+			try {
+				const updatedConfig = await getGeminiConfig(localStorage.token);
+				if (updatedConfig && typeof updatedConfig === 'object') {
+					GEMINI_API_KEY = updatedConfig.GEMINI_API_KEY || '';
+					GEMINI_API_BASE_URL = updatedConfig.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com';
+				}
+			} catch (error) {
+				console.warn('Failed to reload Gemini config:', error);
+			}
+			
+			// Update settings store with the new Gemini API key for directConnections
+			if ($settings) {
+				settings.set({
+					...$settings,
+					directConnections: {
+						...($settings.directConnections || {}),
+						GEMINI_API_KEY: GEMINI_API_KEY || ''
+					}
+				});
+			}
+			
+			// Reload config to ensure everything is in sync
+			await config.set(await getBackendConfig());
+			
+			if (showToast) {
+				toast.success($i18n.t('Gemini API settings updated'));
+			}
+			return true;
+		}
+		return false;
+	};
+
+	const updateTwilioHandler = async (showToast: boolean = true) => {
+		const res = await updateTwilioConfig(localStorage.token, {
+			TWILIO_ACCOUNT_SID: TWILIO_ACCOUNT_SID,
+			TWILIO_AUTH_TOKEN: TWILIO_AUTH_TOKEN,
+			TWILIO_PHONE_NUMBER: TWILIO_PHONE_NUMBER,
+			ENABLE_TWILIO: ENABLE_TWILIO
+		}).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+
+		if (res) {
+			// Reload the Twilio config to ensure we have the latest value
+			try {
+				const updatedConfig = await getTwilioConfig(localStorage.token);
+				if (updatedConfig && typeof updatedConfig === 'object') {
+					TWILIO_ACCOUNT_SID = updatedConfig.TWILIO_ACCOUNT_SID || '';
+					TWILIO_AUTH_TOKEN = updatedConfig.TWILIO_AUTH_TOKEN || '';
+					TWILIO_PHONE_NUMBER = updatedConfig.TWILIO_PHONE_NUMBER || '';
+					ENABLE_TWILIO = updatedConfig.ENABLE_TWILIO || false;
+				}
+			} catch (error) {
+				console.warn('Failed to reload Twilio config:', error);
+			}
+			
+			// Reload config to ensure everything is in sync
+			await config.set(await getBackendConfig());
+			
+			if (showToast) {
+				toast.success($i18n.t('Twilio settings updated'));
+			}
+			return true;
+		}
+		return false;
 	};
 
 	const updateConnectionsHandler = async () => {
@@ -140,16 +239,52 @@
 		if ($user?.role === 'admin') {
 			let ollamaConfig = {};
 			let openaiConfig = {};
+			let geminiConfig = {};
 
+			let twilioConfig: any = {};
+			
 			await Promise.all([
 				(async () => {
-					ollamaConfig = await getOllamaConfig(localStorage.token);
+					try {
+						ollamaConfig = await getOllamaConfig(localStorage.token);
+					} catch (error) {
+						console.error('Failed to load Ollama config:', error);
+						ollamaConfig = {};
+					}
 				})(),
 				(async () => {
-					openaiConfig = await getOpenAIConfig(localStorage.token);
+					try {
+						openaiConfig = await getOpenAIConfig(localStorage.token);
+					} catch (error) {
+						console.error('Failed to load OpenAI config:', error);
+						openaiConfig = {};
+					}
 				})(),
 				(async () => {
-					connectionsConfig = await getConnectionsConfig(localStorage.token);
+					try {
+						geminiConfig = await getGeminiConfig(localStorage.token);
+						console.log('Loaded Gemini config:', geminiConfig);
+					} catch (error) {
+						console.error('Failed to load Gemini config:', error);
+						geminiConfig = {};
+					}
+				})(),
+				(async () => {
+					try {
+						twilioConfig = await getTwilioConfig(localStorage.token);
+						console.log('Loaded Twilio config:', twilioConfig);
+					} catch (error) {
+						console.error('Failed to load Twilio config:', error);
+						twilioConfig = {};
+					}
+				})(),
+				(async () => {
+					try {
+						connectionsConfig = await getConnectionsConfig(localStorage.token);
+					} catch (error) {
+						console.error('Failed to load connections config:', error);
+						connectionsConfig = null;
+					}
 				})()
 			]);
 
@@ -162,6 +297,30 @@
 
 			OLLAMA_BASE_URLS = ollamaConfig.OLLAMA_BASE_URLS;
 			OLLAMA_API_CONFIGS = ollamaConfig.OLLAMA_API_CONFIGS;
+
+			// Load Gemini config - ensure we handle null/undefined properly
+			if (geminiConfig && typeof geminiConfig === 'object') {
+				GEMINI_API_KEY = geminiConfig.GEMINI_API_KEY || '';
+				GEMINI_API_BASE_URL = geminiConfig.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com';
+			} else {
+				GEMINI_API_KEY = '';
+				GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com';
+			}
+			
+			console.log('Final GEMINI_API_KEY length:', GEMINI_API_KEY?.length || 0);
+
+			// Load Twilio config
+			if (twilioConfig && typeof twilioConfig === 'object') {
+				TWILIO_ACCOUNT_SID = twilioConfig.TWILIO_ACCOUNT_SID || '';
+				TWILIO_AUTH_TOKEN = twilioConfig.TWILIO_AUTH_TOKEN || '';
+				TWILIO_PHONE_NUMBER = twilioConfig.TWILIO_PHONE_NUMBER || '';
+				ENABLE_TWILIO = twilioConfig.ENABLE_TWILIO || false;
+			} else {
+				TWILIO_ACCOUNT_SID = '';
+				TWILIO_AUTH_TOKEN = '';
+				TWILIO_PHONE_NUMBER = '';
+				ENABLE_TWILIO = false;
+			}
 
 			if (ENABLE_OPENAI_API) {
 				// get url and idx
@@ -177,9 +336,15 @@
 					if (!(OPENAI_API_CONFIGS[idx]?.enable ?? true)) {
 						return;
 					}
-					const res = await getOpenAIModels(localStorage.token, idx);
-					if (res.pipelines) {
-						pipelineUrls[url] = true;
+					try {
+						const res = await getOpenAIModels(localStorage.token, idx);
+						if (res.pipelines) {
+							pipelineUrls[url] = true;
+						}
+					} catch (error) {
+						// Silently handle errors when checking for pipelines
+						// The error is already logged by getOpenAIModels
+						console.warn(`Failed to fetch models for connection ${idx}:`, error);
 					}
 				});
 			}
@@ -195,8 +360,18 @@
 	});
 
 	const submitHandler = async () => {
-		updateOpenAIHandler();
-		updateOllamaHandler();
+		// Update all configs without showing individual toasts
+		const results = await Promise.all([
+			updateOpenAIHandler(false),
+			updateOllamaHandler(false),
+			updateGeminiHandler(false),
+			updateTwilioHandler(false)
+		]);
+
+		// Show a single success toast if at least one update succeeded
+		if (results.some(r => r === true)) {
+			toast.success($i18n.t('Settings updated successfully'));
+		}
 
 		dispatch('save');
 
@@ -217,7 +392,7 @@
 
 <form class="flex flex-col h-full justify-between text-sm" on:submit|preventDefault={submitHandler}>
 	<div class=" overflow-y-scroll scrollbar-hidden h-full">
-		{#if ENABLE_OPENAI_API !== null && ENABLE_OLLAMA_API !== null && connectionsConfig !== null}
+		{#if ENABLE_OPENAI_API !== null && ENABLE_OLLAMA_API !== null && connectionsConfig !== null && GEMINI_API_KEY !== undefined}
 			<div class="mb-3.5">
 				<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
 
@@ -359,6 +534,48 @@
 							</div>
 						</div>
 					{/if}
+				</div>
+
+				<div class=" my-2">
+					<div class="mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Google Gemini API')}</div>
+
+					<div class="mt-2 space-y-2">
+						<GeminiConnection
+							bind:apiKey={GEMINI_API_KEY}
+							bind:baseUrl={GEMINI_API_BASE_URL}
+							onSubmit={() => {
+								updateGeminiHandler();
+							}}
+							onDelete={() => {
+								GEMINI_API_KEY = '';
+								updateGeminiHandler();
+							}}
+						/>
+					</div>
+
+					<div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+						{$i18n.t('Configure your Google Gemini API key for speech-to-speech phone calls.')}
+					</div>
+				</div>
+
+				<div class=" my-2">
+					<div class="mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Twilio')}</div>
+
+					<div class="mt-2 space-y-2">
+						<TwilioConnection
+							bind:accountSid={TWILIO_ACCOUNT_SID}
+							bind:authToken={TWILIO_AUTH_TOKEN}
+							bind:phoneNumber={TWILIO_PHONE_NUMBER}
+							bind:enableTwilio={ENABLE_TWILIO}
+							onSubmit={() => {
+								updateTwilioHandler();
+							}}
+						/>
+					</div>
+
+					<div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+						{$i18n.t('Configure Twilio for phone calls and SMS. Get your credentials from https://www.twilio.com/')}
+					</div>
 				</div>
 
 				<div class="my-2">

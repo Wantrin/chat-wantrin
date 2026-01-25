@@ -83,7 +83,8 @@
 
 			if (res) {
 				toast.success($i18n.t('Product updated successfully'));
-				goto(`/shops/${res.shop_id}/products/${res.id}`);
+				// Update product object with the response
+				product = res;
 			}
 		} catch (error) {
 			toast.error(`${error}`);

@@ -1044,9 +1044,6 @@ ENABLE_OPENAI_API = PersistentConfig(
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_API_BASE_URL = os.environ.get("OPENAI_API_BASE_URL", "")
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_API_BASE_URL = os.environ.get("GEMINI_API_BASE_URL", "")
-
 
 if OPENAI_API_BASE_URL == "":
     OPENAI_API_BASE_URL = "https://api.openai.com/v1"
@@ -1090,6 +1087,52 @@ try:
 except Exception:
     pass
 OPENAI_API_BASE_URL = "https://api.openai.com/v1"
+
+
+####################################
+# GEMINI
+####################################
+
+GEMINI_API_KEY = PersistentConfig(
+    "GEMINI_API_KEY",
+    "gemini.api_key",
+    os.environ.get("GEMINI_API_KEY", ""),
+)
+
+GEMINI_API_BASE_URL = PersistentConfig(
+    "GEMINI_API_BASE_URL",
+    "gemini.api_base_url",
+    os.environ.get("GEMINI_API_BASE_URL", "https://generativelanguage.googleapis.com"),
+)
+
+
+####################################
+# TWILIO (Phone Calls)
+####################################
+
+TWILIO_ACCOUNT_SID = PersistentConfig(
+    "TWILIO_ACCOUNT_SID",
+    "twilio.account_sid",
+    os.environ.get("TWILIO_ACCOUNT_SID", ""),
+)
+
+TWILIO_AUTH_TOKEN = PersistentConfig(
+    "TWILIO_AUTH_TOKEN",
+    "twilio.auth_token",
+    os.environ.get("TWILIO_AUTH_TOKEN", ""),
+)
+
+TWILIO_PHONE_NUMBER = PersistentConfig(
+    "TWILIO_PHONE_NUMBER",
+    "twilio.phone_number",
+    os.environ.get("TWILIO_PHONE_NUMBER", ""),
+)
+
+ENABLE_TWILIO = PersistentConfig(
+    "ENABLE_TWILIO",
+    "twilio.enable",
+    os.environ.get("ENABLE_TWILIO", "False").lower() == "true",
+)
 
 
 ####################################

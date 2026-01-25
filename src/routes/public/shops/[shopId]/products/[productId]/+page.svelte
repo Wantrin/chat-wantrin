@@ -41,6 +41,8 @@
 		return [];
 	})();
 
+	$: currentImage = productImageUrls.length > 0 ? productImageUrls[0] : null;
+
 	const formatPrice = (price: number, currency: string = 'EUR') => {
 		return new Intl.NumberFormat('fr-FR', {
 			style: 'currency',
@@ -142,6 +144,8 @@
 								showIndicators={true}
 								showArrows={true}
 								autoPlay={false}
+								enableZoom={true}
+								transitionType="fade"
 							/>
 						</div>
 					</div>

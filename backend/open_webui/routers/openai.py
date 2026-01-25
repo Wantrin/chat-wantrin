@@ -145,11 +145,14 @@ async def get_headers_and_cookies(
             headers["X-OpenWebUI-Chat-Id"] = metadata.get("chat_id")
 
     token = None
-    auth_type = config.get("auth_type")
+    auth_type = config.get("auth_type") if config else None
 
     if auth_type == "bearer" or auth_type is None:
         # Default to bearer if not specified
-        token = f"{key}"
+        if key and key.strip():
+            token = f"{key}"
+        else:
+            token = None
     elif auth_type == "none":
         token = None
     elif auth_type == "session":
@@ -214,6 +217,26 @@ async def get_config(request: Request, user=Depends(get_admin_user)):
         "OPENAI_API_BASE_URLS": request.app.state.config.OPENAI_API_BASE_URLS,
         "OPENAI_API_KEYS": request.app.state.config.OPENAI_API_KEYS,
         "OPENAI_API_CONFIGS": request.app.state.config.OPENAI_API_CONFIGS,
+    }
+
+
+@router.get("/keys")
+async def get_keys(request: Request, user=Depends(get_verified_user)):
+    """
+    Get OpenAI API keys.
+    """
+    return {
+        "OPENAI_API_KEYS": request.app.state.config.OPENAI_API_KEYS,
+    }
+
+
+@router.get("/urls")
+async def get_urls(request: Request, user=Depends(get_verified_user)):
+    """
+    Get OpenAI API base URLs.
+    """
+    return {
+        "OPENAI_API_BASE_URLS": request.app.state.config.OPENAI_API_BASE_URLS,
     }
 
 
@@ -341,6 +364,84 @@ async def speech(request: Request, user=Depends(get_verified_user)):
 
     except ValueError:
         raise HTTPException(status_code=401, detail=ERROR_MESSAGES.OPENAI_NOT_FOUND)
+
+
+############################
+# Realtime API - Ephemeral Keys
+############################
+
+
+class RealtimeClientSecretRequest(BaseModel):
+    session: Optional[dict] = None
+
+
+@router.post("/realtime/client_secrets")
+async def create_realtime_client_secret(
+    request: Request,
+    form_data: RealtimeClientSecretRequest,
+    user=Depends(get_verified_user),
+):
+    """
+    Generate an ephemeral client secret for OpenAI Realtime API.
+    This allows secure client-side connections without exposing the main API key.
+    """
+    idx = None
+    try:
+        idx = request.app.state.config.OPENAI_API_BASE_URLS.index(
+            "https://api.openai.com/v1"
+        )
+    except ValueError:
+        raise HTTPException(status_code=401, detail=ERROR_MESSAGES.OPENAI_NOT_FOUND)
+
+    url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
+    key = request.app.state.config.OPENAI_API_KEYS[idx]
+    api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
+        str(idx),
+        request.app.state.config.OPENAI_API_CONFIGS.get(url, {}),
+    )
+
+    headers, cookies = await get_headers_and_cookies(
+        request, url, key, api_config, user=user
+    )
+
+    # Default session config if not provided
+    session_config = form_data.session or {
+        "type": "realtime",
+        "model": "gpt-realtime",
+        "audio": {
+            "output": {
+                "voice": "alloy"
+            }
+        }
+    }
+
+    try:
+        r = requests.post(
+            url=f"{url}/realtime/client_secrets",
+            json={"session": session_config},
+            headers=headers,
+            cookies=cookies,
+        )
+
+        r.raise_for_status()
+        return r.json()
+
+    except Exception as e:
+        log.exception(e)
+
+        detail = None
+        if r is not None:
+            try:
+                res = r.json()
+                if "error" in res:
+                    detail = f"External: {res['error']}"
+            except Exception:
+                detail = f"External: {e}"
+
+        raise HTTPException(
+            status_code=r.status_code if r else 500,
+            detail=detail if detail else "Open WebUI: Server Connection Error",
+        )
 
 
 async def get_all_models_responses(request: Request, user: UserModel) -> list:
@@ -553,6 +654,13 @@ async def get_models(
     else:
         url = request.app.state.config.OPENAI_API_BASE_URLS[url_idx]
         key = request.app.state.config.OPENAI_API_KEYS[url_idx]
+
+        # Check if key is empty or None
+        if not key or not key.strip():
+            raise HTTPException(
+                status_code=400,
+                detail=f"OpenAI API key is not configured for connection index {url_idx}. Please configure it in Settings > Connections."
+            )
 
         api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
             str(url_idx),

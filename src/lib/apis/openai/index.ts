@@ -250,11 +250,26 @@ export const getOpenAIModels = async (token: string, urlIdx?: number) => {
 		}
 	)
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) {
+				const errorData = await res.json().catch(() => ({ detail: `HTTP ${res.status} Error` }));
+				throw errorData;
+			}
 			return res.json();
 		})
 		.catch((err) => {
-			error = `OpenAI: ${err?.error?.message ?? 'Network Problem'}`;
+			// Extract error message from various possible formats
+			let errorMessage = 'Network Problem';
+			if (err?.detail) {
+				// FastAPI error format
+				errorMessage = err.detail;
+			} else if (err?.error?.message) {
+				// OpenAI API error format
+				errorMessage = err.error.message;
+			} else if (err?.message) {
+				// Generic error format
+				errorMessage = err.message;
+			}
+			error = `OpenAI: ${errorMessage}`;
 			return [];
 		});
 
@@ -415,6 +430,59 @@ export const synthesizeOpenAISpeech = async (
 		error = err;
 		return null;
 	});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export interface RealtimeClientSecretRequest {
+	session?: {
+		type?: string;
+		model?: string;
+		instructions?: string;
+		audio?: {
+			output?: {
+				voice?: string;
+			};
+		};
+	};
+}
+
+export interface RealtimeClientSecretResponse {
+	value: string; // The ephemeral key
+}
+
+export const createRealtimeClientSecret = async (
+	token: string,
+	request: RealtimeClientSecretRequest
+): Promise<RealtimeClientSecretResponse> => {
+	let error = null;
+
+	const res = await fetch(`${OPENAI_API_BASE_URL}/realtime/client_secrets`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
+		},
+		body: JSON.stringify(request)
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			if ('detail' in err) {
+				error = err.detail;
+			} else {
+				error = 'Server connection failed';
+			}
+			return null;
+		});
 
 	if (error) {
 		throw error;

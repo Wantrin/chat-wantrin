@@ -5,7 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { getShopById } from '$lib/apis/shops';
-	import { getOrderById, updateOrderById, getOrderStatusHistory, type OrderStatusHistory } from '$lib/apis/orders';
+	import { getOrderById, updateOrderById, getOrderStatusHistory, type OrderStatusHistory, initiatePhoneCall, type PhoneCallForm } from '$lib/apis/orders';
 	import { getDeliveryPersonsByShopId, type DeliveryPerson } from '$lib/apis/delivery_persons';
 	import { getAllUsers } from '$lib/apis/users';
 	import { showSidebar, models, settings, user, config, socket } from '$lib/stores';
@@ -14,6 +14,8 @@
 	import { splitStream, convertMessagesToHistory, convertHistoryToMessages } from '$lib/utils';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 	import Messages from '$lib/components/chat/Messages.svelte';
+	import PhoneCallOverlay from '$lib/components/orders/PhoneCallOverlay.svelte';
+	import SMSOverlay from '$lib/components/orders/SMSOverlay.svelte';
 	import { v4 as uuidv4 } from 'uuid';
 	import { onDestroy } from 'svelte';
 
@@ -48,6 +50,16 @@
 	let stopGeneration = false;
 	let selectedModelId = '';
 	let selectedModels = [];
+	
+	// Phone Call variables
+	let showPhoneCall = false;
+	let phoneCallType: 'customer' | 'delivery_person' = 'customer';
+	let phoneCallDeliveryPerson: DeliveryPerson | null = null;
+	
+	// SMS variables
+	let showSMS = false;
+	let smsSendTo: 'customer' | 'delivery_person' | 'both' = 'customer';
+	let smsDeliveryPerson: DeliveryPerson | null = null;
 	
 	$: if (selectedModelId) {
 		selectedModels = [selectedModelId];
@@ -1106,9 +1118,64 @@ Remember: Always check and highlight the notes if they exist, especially if they
 								{/if}
 							</select>
 							{#if order.assigned_delivery_person_id}
-								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-									{$i18n ? $i18n.t('Currently assigned') : 'Currently assigned'}: {deliveryPersons.find(dp => dp.id === order.assigned_delivery_person_id)?.name || order.assigned_delivery_person_id}
-								</p>
+								{@const assignedDP = deliveryPersons.find(dp => dp.id === order.assigned_delivery_person_id)}
+								<div class="mt-2 flex items-center justify-between">
+									<p class="text-xs text-gray-500 dark:text-gray-400">
+										{$i18n ? $i18n.t('Currently assigned') : 'Currently assigned'}: {assignedDP?.name || order.assigned_delivery_person_id}
+									</p>
+									{#if assignedDP && assignedDP.phone}
+										<div class="flex gap-2">
+											<button
+												class="px-3 py-1.5 bg-green-500 text-white text-xs rounded-lg hover:bg-green-600 transition flex items-center gap-1.5"
+												on:click={async () => {
+													try {
+														const token = typeof window !== 'undefined' ? localStorage.token : '';
+														const callForm: PhoneCallForm = {
+															phone_number: assignedDP.phone,
+															order_id: order.id,
+															delivery_person_id: assignedDP.id,
+															call_type: 'delivery_person',
+															context: {
+																order_status: order.status,
+																delivery_person_name: assignedDP.name
+															}
+														};
+														
+														const result = await initiatePhoneCall(token, order.id, callForm);
+														if (result) {
+															phoneCallType = 'delivery_person';
+															phoneCallDeliveryPerson = assignedDP;
+															showPhoneCall = true;
+														}
+													} catch (error) {
+														toast.error($i18n ? $i18n.t('Failed to initiate call') : 'Failed to initiate call');
+														console.error(error);
+													}
+												}}
+												title={$i18n ? $i18n.t('Call Delivery Person') : 'Call Delivery Person'}
+											>
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+													<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+												</svg>
+												<span>{$i18n ? $i18n.t('Call') : 'Call'}</span>
+											</button>
+											<button
+												class="px-3 py-1.5 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition flex items-center gap-1.5"
+												on:click={() => {
+													smsSendTo = 'delivery_person';
+													smsDeliveryPerson = assignedDP;
+													showSMS = true;
+												}}
+												title={$i18n ? $i18n.t('Send SMS to Delivery Person') : 'Send SMS to Delivery Person'}
+											>
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+													<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+												</svg>
+												<span>{$i18n ? $i18n.t('SMS') : 'SMS'}</span>
+											</button>
+										</div>
+									{/if}
+								</div>
 							{/if}
 						</div>
 
@@ -1166,9 +1233,60 @@ Remember: Always check and highlight the notes if they exist, especially if they
 								<strong class="text-gray-900 dark:text-gray-100">{$i18n ? $i18n.t('Email') : 'Email'}:</strong> {order.customer_email}
 							</p>
 							{#if order.customer_phone}
-								<p>
-									<strong class="text-gray-900 dark:text-gray-100">{$i18n ? $i18n.t('Phone') : 'Phone'}:</strong> {order.customer_phone}
-								</p>
+								<div class="flex items-center justify-between">
+									<p>
+										<strong class="text-gray-900 dark:text-gray-100">{$i18n ? $i18n.t('Phone') : 'Phone'}:</strong> {order.customer_phone}
+									</p>
+									<div class="flex gap-2">
+										<button
+											class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition flex items-center gap-2"
+											on:click={async () => {
+												try {
+													const token = typeof window !== 'undefined' ? localStorage.token : '';
+													const callForm: PhoneCallForm = {
+														phone_number: order.customer_phone,
+														order_id: order.id,
+														call_type: 'customer',
+														context: {
+															order_status: order.status,
+															customer_name: order.customer_name
+														}
+													};
+													
+													const result = await initiatePhoneCall(token, order.id, callForm);
+													if (result) {
+														phoneCallType = 'customer';
+														phoneCallDeliveryPerson = null;
+														showPhoneCall = true;
+													}
+												} catch (error) {
+													toast.error($i18n ? $i18n.t('Failed to initiate call') : 'Failed to initiate call');
+													console.error(error);
+												}
+											}}
+											title={$i18n ? $i18n.t('Call Customer') : 'Call Customer'}
+										>
+											<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+											</svg>
+											<span>{$i18n ? $i18n.t('Call') : 'Call'}</span>
+										</button>
+										<button
+											class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+											on:click={() => {
+												smsSendTo = 'customer';
+												smsDeliveryPerson = null;
+												showSMS = true;
+											}}
+											title={$i18n ? $i18n.t('Send SMS to Customer') : 'Send SMS to Customer'}
+										>
+											<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+											</svg>
+											<span>{$i18n ? $i18n.t('SMS') : 'SMS'}</span>
+										</button>
+									</div>
+								</div>
 							{/if}
 						</div>
 					</div>
@@ -1481,4 +1599,36 @@ Remember: Always check and highlight the notes if they exist, especially if they
 			{/if}
 		</div>
 	</div>
+{/if}
+
+{#if showPhoneCall}
+	<PhoneCallOverlay
+		{order}
+		deliveryPerson={phoneCallDeliveryPerson}
+		callType={phoneCallType}
+		phoneNumber={phoneCallType === 'customer' 
+			? (order?.customer_phone || '') 
+			: (phoneCallDeliveryPerson?.phone || '')}
+		onClose={() => {
+			showPhoneCall = false;
+		}}
+		onCallEnd={() => {
+			showPhoneCall = false;
+		}}
+	/>
+{/if}
+
+{#if showSMS}
+	<SMSOverlay
+		{order}
+		deliveryPerson={smsDeliveryPerson}
+		sendTo={smsSendTo}
+		onClose={() => {
+			showSMS = false;
+		}}
+		onSent={async () => {
+			// Reload order data to show SMS history
+			await loadData();
+		}}
+	/>
 {/if}

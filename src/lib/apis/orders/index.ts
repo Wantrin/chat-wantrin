@@ -286,3 +286,94 @@ export const getOrderStatusHistory = async (token: string, orderId: string): Pro
 
 	return res || [];
 };
+
+export interface PhoneCallForm {
+	phone_number: string;
+	order_id?: string;
+	delivery_person_id?: string;
+	call_type: 'customer' | 'delivery_person';
+	context?: object;
+}
+
+export interface PhoneCallResponse {
+	call_id: string;
+	status: string;
+	message: string;
+}
+
+export const initiatePhoneCall = async (
+	token: string,
+	orderId: string,
+	formData: PhoneCallForm
+): Promise<PhoneCallResponse> => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/orders/${orderId}/initiate-phone-call`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(formData)
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail || err.message;
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export interface SMSForm {
+	phone_number?: string;
+	message: string;
+	delivery_person_id?: string;
+	send_to: 'customer' | 'delivery_person' | 'both';
+	context?: object;
+}
+
+export interface SMSResponse {
+	message_sid?: string;
+	status: string;
+	message: string;
+	sent_to: string[];
+}
+
+export const sendSMS = async (
+	token: string,
+	orderId: string,
+	formData: SMSForm
+): Promise<SMSResponse> => {
+	try {
+		const res = await fetch(`${WEBUI_API_BASE_URL}/orders/${orderId}/send-sms`, {
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify(formData)
+		});
+
+		if (!res.ok) {
+			const errorData = await res.json();
+			throw errorData;
+		}
+
+		return await res.json();
+	} catch (err: any) {
+		console.error('SMS API error:', err);
+		// Re-throw to be caught by the component
+		throw err;
+	}
+};
