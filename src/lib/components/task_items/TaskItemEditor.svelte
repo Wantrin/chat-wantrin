@@ -2,17 +2,18 @@
 	import { onMount, getContext, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
+	import { v4 as uuidv4 } from 'uuid';
 	import { WEBUI_NAME, user, models, settings, config } from '$lib/stores';
 	import {
 		getTaskItemById,
 		updateTaskItemById,
 		deleteTaskItemById
 	} from '$lib/apis/task_items';
-	import { capitalizeFirstLetter, splitStream } from '$lib/utils';
+	import { capitalizeFirstLetter, splitStream, convertMessagesToHistory, convertHistoryToMessages } from '$lib/utils';
 	import { chatCompletion } from '$lib/apis/openai';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 	import dayjs from '$lib/dayjs';
-	import Message from './TaskItemChat/Message.svelte';
+	import Messages from '$lib/components/chat/Messages.svelte';
 	import relativeTime from 'dayjs/plugin/relativeTime';
 	dayjs.extend(relativeTime);
 
@@ -26,11 +27,16 @@
 	let showDeleteConfirm = false;
 	let showAIAssistant = false;
 	let messages = [];
+	let history = { messages: {}, currentId: null };
 	let currentMessage = '';
 	let generatingResponse = false;
 	let stopGeneration = false;
 	let selectedModelId = '';
-	let messagesContainerElement = null;
+	let selectedModels = [];
+	
+	$: if (selectedModelId) {
+		selectedModels = [selectedModelId];
+	}
 
 	let title = '';
 	let description = '';
@@ -58,8 +64,11 @@
 					...msg,
 					done: msg.done !== undefined ? msg.done : true // Ensure done property exists
 				}));
+				// Convert to history format
+				history = convertMessagesToHistory(messages);
 			} else {
 				messages = [];
+				history = { messages: {}, currentId: null };
 			}
 		}
 
@@ -102,29 +111,26 @@
 		saving = false;
 	};
 
-	const scrollToBottom = () => {
-		if (messagesContainerElement) {
-			messagesContainerElement.scrollTop = messagesContainerElement.scrollHeight;
-		}
-	};
 
 	const initializeAIChat = async () => {
 		if (!title && !description) return;
 
 		// Get default model
-		selectedModelId = $settings?.default_model || ($models.length > 0 ? $models[0].id : '');
+		if (!selectedModelId) {
+			selectedModelId = $settings?.default_model || ($models.length > 0 ? $models[0].id : '');
+		}
 		if (!selectedModelId) {
 			toast.error($i18n.t('No model available'));
 			return;
 		}
+		selectedModels = selectedModelId ? [selectedModelId] : [];
 
 		showAIAssistant = true;
 		
 		// If messages already exist (from database), just display them
-		if (messages.length > 0) {
-			// Load existing messages and scroll to bottom
+		if (Object.keys(history.messages).length > 0) {
+			// Load existing messages
 			await tick();
-			scrollToBottom();
 		} else {
 			// No messages exist, generate initial suggestions
 			currentMessage = '';
@@ -134,6 +140,9 @@
 
 	const saveChatMessages = async () => {
 		if (!id || !taskItem) return;
+		
+		// Convert history back to messages array for storage
+		messages = convertHistoryToMessages(history);
 		
 		// Save chat messages in data without showing toast
 		const taskData = {
@@ -166,30 +175,57 @@
 
 		// Add user message if there's a current message
 		if (currentMessage.trim()) {
-			messages.push({
+			const userMessageId = uuidv4();
+			const parentId = history.currentId;
+			
+			const userMessage = {
+				id: userMessageId,
+				parentId: parentId,
+				childrenIds: [],
 				role: 'user',
 				content: currentMessage,
-				done: true
-			});
-			messages = messages;
+				done: true,
+				timestamp: Math.floor(Date.now() / 1000)
+			};
+			
+			if (parentId !== null && history.messages[parentId]) {
+				history.messages[parentId].childrenIds.push(userMessageId);
+			}
+			
+			history.messages[userMessageId] = userMessage;
+			history.currentId = userMessageId;
+			history = history;
 			currentMessage = '';
 			await tick();
-			scrollToBottom();
 			
 			// Save messages after user sends a message
 			await saveChatMessages();
 		}
 
 		// Create assistant message for streaming
-		let responseMessage = {
+		const responseMessageId = uuidv4();
+		const parentId = history.currentId;
+		
+		const responseMessage = {
+			id: responseMessageId,
+			parentId: parentId,
+			childrenIds: [],
 			role: 'assistant',
 			content: '',
-			done: false
+			done: false,
+			model: model.id,
+			modelName: model.name ?? model.id,
+			timestamp: Math.floor(Date.now() / 1000)
 		};
-		messages.push(responseMessage);
-		messages = messages;
+		
+		if (parentId !== null && history.messages[parentId]) {
+			history.messages[parentId].childrenIds.push(responseMessageId);
+		}
+		
+		history.messages[responseMessageId] = responseMessage;
+		history.currentId = responseMessageId;
+		history = history;
 		await tick();
-		scrollToBottom();
 
 		generatingResponse = true;
 		stopGeneration = false;
@@ -230,12 +266,13 @@ ${hasDescription
 Be conversational, helpful, and provide practical advice. Format your responses in markdown when appropriate.`;
 
 		// Build chat messages with system prompt and conversation history
+		const messagesList = convertHistoryToMessages(history);
 		const chatMessages = [
 			{
 				role: 'system',
 				content: systemPrompt
 			},
-			...messages.filter(m => m.role !== 'system').map(m => ({
+			...messagesList.filter(m => m.role !== 'system').map(m => ({
 				role: m.role,
 				content: m.content
 			}))
@@ -284,8 +321,8 @@ Be conversational, helpful, and provide practical advice. Format your responses 
 						for (const line of lines) {
 							if (line !== '') {
 								if (line === 'data: [DONE]') {
-									responseMessage.done = true;
-									messages = messages;
+									history.messages[responseMessageId].done = true;
+									history = history;
 									generatingResponse = false;
 									
 									// Save messages after AI response is complete
@@ -296,9 +333,8 @@ Be conversational, helpful, and provide practical advice. Format your responses 
 									if (data.choices && data.choices.length > 0) {
 										const choice = data.choices[0];
 										if (choice.delta && choice.delta.content) {
-											responseMessage.content += choice.delta.content;
-											messages = messages;
-											scrollToBottom();
+											history.messages[responseMessageId].content += choice.delta.content;
+											history = history;
 										}
 									}
 								}
@@ -311,8 +347,18 @@ Be conversational, helpful, and provide practical advice. Format your responses 
 			}
 		} catch (error) {
 			toast.error($i18n.t('Failed to generate response'));
-			messages.pop(); // Remove the failed assistant message
-			messages = messages;
+			// Remove the failed assistant message
+			if (history.messages[responseMessageId]) {
+				const parentId = history.messages[responseMessageId].parentId;
+				if (parentId !== null && history.messages[parentId]) {
+					history.messages[parentId].childrenIds = history.messages[parentId].childrenIds.filter(id => id !== responseMessageId);
+				}
+				delete history.messages[responseMessageId];
+				if (history.currentId === responseMessageId) {
+					history.currentId = parentId;
+				}
+				history = history;
+			}
 			generatingResponse = false;
 		}
 	};
@@ -347,11 +393,17 @@ Be conversational, helpful, and provide practical advice. Format your responses 
 		await loadTaskItem();
 		
 		// If messages exist, automatically show the chat
-		if (messages.length > 0) {
+		if (Object.keys(history.messages).length > 0) {
 			showAIAssistant = true;
 			selectedModelId = $settings?.default_model || ($models.length > 0 ? $models[0].id : '');
+			selectedModels = selectedModelId ? [selectedModelId] : [];
 			await tick();
-			scrollToBottom();
+		}
+		
+		// Initialize selectedModelId if not set
+		if (!selectedModelId && $models.length > 0) {
+			selectedModelId = $settings?.default_model || $models[0].id;
+			selectedModels = selectedModelId ? [selectedModelId] : [];
 		}
 	});
 
@@ -490,53 +542,157 @@ Be conversational, helpful, and provide practical advice. Format your responses 
 			<!-- AI Chat panel (visible when showAIAssistant is true) -->
 			{#if showAIAssistant}
 				<div class="w-1/2 flex flex-col overflow-hidden">
-					<div class="flex-1 overflow-auto">
-						<div
-							bind:this={messagesContainerElement}
-							class="space-y-3 pb-12"
-						>
-							{#if messages.length === 0}
-								<div class="text-gray-500 text-sm text-center py-8">
-									{$i18n.t('AI Assistant will help you complete this task.')}
-								</div>
-							{:else}
-								{#each messages as message, idx (idx)}
-									<div
-										class="flex flex-col justify-between px-5 mb-3 w-full {($settings?.widescreenMode ?? null)
-											? 'max-w-full'
-											: 'max-w-5xl'} mx-auto rounded-lg group"
-									>
-										<Message
-											{message}
-											{idx}
-											isLastMessage={idx === messages.length - 1}
-											onEdit={async (msgIdx, content) => {
-												messages[msgIdx].content = content;
-												messages = messages;
-												await saveChatMessages();
-											}}
-											onDelete={async (msgIdx) => {
-												messages = messages.filter((_, i) => i !== msgIdx);
-												messages = messages;
-												await saveChatMessages();
-											}}
-											onRegenerate={async (msgIdx) => {
-												// Remove the assistant message and regenerate
-												messages = messages.slice(0, msgIdx);
-												messages = messages;
-												await saveChatMessages();
-												await generateAIChatResponse();
-											}}
-											onContinue={async () => {
-												await generateAIChatResponse();
-											}}
-										/>
-									</div>
-								{/each}
-							{/if}
-						</div>
+					<div class="flex-1 overflow-auto" id="messages-container">
+						<Messages
+							className="h-full flex pt-4 pb-8"
+							chatId={id || ''}
+							{user}
+							bind:history
+							{selectedModels}
+							readOnly={false}
+							editCodeBlock={true}
+							bottomPadding={false}
+							topPadding={false}
+							sendMessage={() => {}}
+							continueResponse={async () => {
+								await generateAIChatResponse();
+							}}
+							regenerateResponse={async (messageId) => {
+								// Remove messages from the specified messageId onwards
+								const messageToRegenerate = history.messages[messageId];
+								if (messageToRegenerate && messageToRegenerate.parentId !== null) {
+									const parentId = messageToRegenerate.parentId;
+									// Remove all children from parent
+									history.messages[parentId].childrenIds = [];
+									// Delete all messages after parent
+									const messagesToDelete = [];
+									const queue = [messageId];
+									while (queue.length > 0) {
+										const currentId = queue.shift();
+										messagesToDelete.push(currentId);
+										if (history.messages[currentId]?.childrenIds) {
+											queue.push(...history.messages[currentId].childrenIds);
+										}
+									}
+									messagesToDelete.forEach(id => delete history.messages[id]);
+									history.currentId = parentId;
+									history = history;
+									await saveChatMessages();
+									await generateAIChatResponse();
+								}
+							}}
+							editMessage={async (messageId, { content, files }, submit = false) => {
+								if (submit) {
+									// Create new message after editing
+									const newMessageId = uuidv4();
+									const message = history.messages[messageId];
+									const parentId = message.parentId;
+									
+									const newMessage = {
+										...message,
+										id: newMessageId,
+										parentId: parentId,
+										childrenIds: [],
+										content: content,
+										files: files,
+										timestamp: Math.floor(Date.now() / 1000)
+									};
+									
+									if (parentId !== null && history.messages[parentId]) {
+										history.messages[parentId].childrenIds.push(newMessageId);
+									}
+									
+									history.messages[newMessageId] = newMessage;
+									history.currentId = newMessageId;
+									history = history;
+									
+									if (message.role === 'user') {
+										await saveChatMessages();
+										await generateAIChatResponse();
+									} else {
+										await saveChatMessages();
+									}
+								} else {
+									// Just update content
+									history.messages[messageId].content = content;
+									if (files !== undefined) {
+										history.messages[messageId].files = files;
+									}
+									history = history;
+									await saveChatMessages();
+								}
+							}}
+							deleteMessage={async (messageId) => {
+								const messageToDelete = history.messages[messageId];
+								const parentMessageId = messageToDelete.parentId;
+								const childMessageIds = messageToDelete.childrenIds ?? [];
+								
+								// Collect all grandchildren
+								const grandchildrenIds = childMessageIds.flatMap(
+									(childId) => history.messages[childId]?.childrenIds ?? []
+								);
+								
+								// Update parent's children
+								if (parentMessageId && history.messages[parentMessageId]) {
+									history.messages[parentMessageId].childrenIds = [
+										...history.messages[parentMessageId].childrenIds.filter((id) => id !== messageId),
+										...grandchildrenIds
+									];
+								}
+								
+								// Update grandchildren's parent
+								grandchildrenIds.forEach((grandchildId) => {
+									if (history.messages[grandchildId]) {
+										history.messages[grandchildId].parentId = parentMessageId;
+									}
+								});
+								
+								// Delete the message and its children
+								[messageId, ...childMessageIds].forEach((id) => {
+									delete history.messages[id];
+								});
+								
+								if (history.currentId === messageId) {
+									history.currentId = parentMessageId;
+								}
+								
+								history = history;
+								await saveChatMessages();
+							}}
+							updateChat={async () => {
+								await saveChatMessages();
+							}}
+							rateMessage={async () => {}}
+							actionMessage={async () => {}}
+							saveMessage={async () => {}}
+							submitMessage={async () => {}}
+							mergeResponses={async () => {}}
+							addMessages={async () => {}}
+							gotoMessage={async () => {}}
+							showPreviousMessage={async () => {}}
+							showNextMessage={async () => {}}
+							setInputText={() => {}}
+							triggerScroll={() => {}}
+							atSelectedModel={null}
+							onSelect={() => {}}
+						/>
 					</div>
 					<div class="pb-2 z-10 px-5 border-t border-gray-200 dark:border-gray-700 pt-2">
+						<div class="flex gap-2 items-end mb-2">
+							<div class="flex-1">
+								<select
+									class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+									bind:value={selectedModelId}
+									disabled={generatingResponse}
+								>
+									{#each $models.filter((model) => !(model?.info?.meta?.hidden ?? false)) as model}
+										<option value={model.id} class="bg-gray-50 dark:bg-gray-700">
+											{model.name}
+										</option>
+									{/each}
+								</select>
+							</div>
+						</div>
 						<div class="flex gap-2 items-end">
 							<div class="flex-1 relative">
 								<textarea

@@ -193,7 +193,8 @@ export const convertMessagesToHistory = (messages) => {
 	let messageId = null;
 
 	for (const message of messages) {
-		messageId = uuidv4();
+		// Preserve existing ID if available, otherwise generate new one
+		messageId = message.id || uuidv4();
 
 		if (parentMessageId !== null) {
 			history.messages[parentMessageId].childrenIds = [
@@ -214,6 +215,14 @@ export const convertMessagesToHistory = (messages) => {
 
 	history.currentId = messageId;
 	return history;
+};
+
+// Convert history format back to simple messages array
+export const convertHistoryToMessages = (history) => {
+	if (!history || !history.currentId) {
+		return [];
+	}
+	return createMessagesList(history, history.currentId);
 };
 
 export const getGravatarURL = (email) => {
