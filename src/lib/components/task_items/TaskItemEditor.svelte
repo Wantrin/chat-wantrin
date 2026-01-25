@@ -138,6 +138,20 @@
 		}
 	};
 
+	let scrollTimeout = null;
+	const scrollToBottom = () => {
+		// Debounce scroll to avoid too many calls during streaming
+		if (scrollTimeout) {
+			clearTimeout(scrollTimeout);
+		}
+		scrollTimeout = setTimeout(() => {
+			const element = document.getElementById('messages-container');
+			if (element) {
+				element.scrollTop = element.scrollHeight;
+			}
+		}, 50);
+	};
+
 	const saveChatMessages = async () => {
 		if (!id || !taskItem) return;
 		
@@ -198,6 +212,12 @@
 			currentMessage = '';
 			await tick();
 			
+			// Scroll to show the new message immediately
+			const element = document.getElementById('messages-container');
+			if (element) {
+				element.scrollTop = element.scrollHeight;
+			}
+			
 			// Save messages after user sends a message
 			await saveChatMessages();
 		}
@@ -226,6 +246,12 @@
 		history.currentId = responseMessageId;
 		history = history;
 		await tick();
+		
+		// Scroll to show the new message immediately
+		const element = document.getElementById('messages-container');
+		if (element) {
+			element.scrollTop = element.scrollHeight;
+		}
 
 		generatingResponse = true;
 		stopGeneration = false;
@@ -309,8 +335,10 @@ Be conversational, helpful, and provide practical advice. Format your responses 
 						if (stopGeneration) {
 							controller.abort('User: Stop Response');
 						}
-						responseMessage.done = true;
-						messages = messages;
+						if (history.messages[responseMessageId]) {
+							history.messages[responseMessageId].done = true;
+							history = history;
+						}
 						generatingResponse = false;
 						break;
 					}
@@ -321,31 +349,46 @@ Be conversational, helpful, and provide practical advice. Format your responses 
 						for (const line of lines) {
 							if (line !== '') {
 								if (line === 'data: [DONE]') {
-									history.messages[responseMessageId].done = true;
-									history = history;
+									if (history.messages[responseMessageId]) {
+										history.messages[responseMessageId].done = true;
+										history = history;
+									}
 									generatingResponse = false;
 									
 									// Save messages after AI response is complete
 									await saveChatMessages();
+									
+									// Scroll to bottom immediately when done
+									await tick();
+									const element = document.getElementById('messages-container');
+									if (element) {
+										element.scrollTop = element.scrollHeight;
+									}
 								} else if (line.startsWith('data: ')) {
 									let data = JSON.parse(line.replace(/^data: /, ''));
 
 									if (data.choices && data.choices.length > 0) {
 										const choice = data.choices[0];
 										if (choice.delta && choice.delta.content) {
-											history.messages[responseMessageId].content += choice.delta.content;
-											history = history;
+											if (history.messages[responseMessageId]) {
+												history.messages[responseMessageId].content += choice.delta.content;
+												history = history;
+												
+												// Scroll to bottom during streaming (debounced)
+												scrollToBottom();
+											}
 										}
 									}
 								}
 							}
 						}
 					} catch (error) {
-						// Error handled silently
+						console.error('Error parsing stream:', error);
 					}
 				}
 			}
 		} catch (error) {
+			console.error('Error generating response:', error);
 			toast.error($i18n.t('Failed to generate response'));
 			// Remove the failed assistant message
 			if (history.messages[responseMessageId]) {

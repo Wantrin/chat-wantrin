@@ -108,12 +108,22 @@
 	};
 
 	const updateChat = async () => {
+		// Skip if chatId is empty or invalid (e.g., when used in orders/tasks context)
+		if (!chatId || chatId.trim() === '') {
+			return;
+		}
+		
 		if (!$temporaryChatEnabled) {
 			history = history;
 			await tick();
+			
+			// Try to update chat, but don't fail if chat doesn't exist (e.g., when chatId is an order/task ID)
 			await updateChatById(localStorage.token, chatId, {
 				history: history,
 				messages: messages
+			}).catch((error) => {
+				// Silently fail if chat doesn't exist (this is expected in orders/tasks context)
+				console.warn('Could not update chat (this is normal for orders/tasks):', error);
 			});
 
 			currentChatPage.set(1);

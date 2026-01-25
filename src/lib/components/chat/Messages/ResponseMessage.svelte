@@ -411,10 +411,26 @@
 			}
 		};
 
+		// Skip chat fetch if chatId is empty or if we're in a read-only context (like orders/tasks)
+		// In these contexts, chatId might be an order/task ID, not a real chat ID
+		if (!chatId || chatId.trim() === '') {
+			feedbackLoading = false;
+			return;
+		}
+
+		// Try to get chat, but don't fail if it doesn't exist (e.g., when chatId is an order/task ID)
 		const chat = await getChatById(localStorage.token, chatId).catch((error) => {
-			toast.error(`${error}`);
+			// Silently fail if chat doesn't exist (e.g., when chatId is an order/task ID)
+			// This is expected in contexts like orders/tasks where chatId is not a real chat ID
+			console.warn('Could not fetch chat for feedback (this is normal for orders/tasks):', error);
+			return null;
 		});
 		if (!chat) {
+			// In contexts like orders/tasks, we can't create feedback the same way
+			// Just update the message annotation locally without creating feedback
+			message.annotation = updatedMessage.annotation;
+			saveMessage(message.id, message);
+			feedbackLoading = false;
 			return;
 		}
 
@@ -487,8 +503,8 @@
 		if (!details) {
 			showRateComment = true;
 
-			if (!updatedMessage.annotation?.tags && (message?.content ?? '') !== '') {
-				// attempt to generate tags
+			if (!updatedMessage.annotation?.tags && (message?.content ?? '') !== '' && chatId && chatId.trim() !== '') {
+				// attempt to generate tags (only if chatId is valid)
 				const tags = await generateTags(localStorage.token, message.model, messages, chatId).catch(
 					(error) => {
 						console.error(error);

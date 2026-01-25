@@ -157,6 +157,10 @@
 				// Auto-respond if order is newly created (pending status and no chat messages)
 				// This triggers when the order is first opened after client submission
 				if (order.status === 'pending' && Object.keys(history.messages).length === 0) {
+					// Use default model for automatic summary
+					selectedModelId = $settings?.default_model || ($models.length > 0 ? $models[0].id : '');
+					selectedModels = selectedModelId ? [selectedModelId] : [];
+					
 					// Wait a bit for the UI to render, then auto-open chat and respond
 					setTimeout(async () => {
 						if (!showAIAssistant) {
@@ -202,25 +206,41 @@
 						await initializeAIChat();
 					}
 					
+					// Use default model for automatic summaries
+					selectedModelId = $settings?.default_model || ($models.length > 0 ? $models[0].id : '');
+					selectedModels = selectedModelId ? [selectedModelId] : [];
+					
 					// Generate automatic response
 					if (selectedStatus === 'pending' && Object.keys(history.messages).length === 0) {
-						// New order - request initial summary
+						// New order - request initial summary with complete order info
+						const completeOrderInfo = getCompleteOrderInfo(order);
+						const notesWarning = order.notes 
+							? ($i18n 
+								? `\n\n⚠️ ATTENTION: Cette commande contient des notes importantes. Assure-toi de les lire attentivement et de mettre en évidence toute erreur, correction ou demande spéciale mentionnée dans les notes.`
+								: `\n\n⚠️ ATTENTION: This order contains important notes. Make sure to read them carefully and highlight any errors, corrections, or special requests mentioned in the notes.`)
+							: '';
 						currentMessage = $i18n 
-							? `Une nouvelle commande vient d'être soumise par le client. Fais-moi un résumé complet de cette commande et vérifie qu'elle est correcte.`
-							: `A new order has just been submitted by the client. Give me a complete summary of this order and verify that it is correct.`;
+							? `Une nouvelle commande vient d'être soumise par le client. Voici toutes les informations de la commande:\n\n${completeOrderInfo}\n\nFais-moi un résumé complet de cette commande et vérifie qu'elle est correcte.${notesWarning}`
+							: `A new order has just been submitted by the client. Here is all the order information:\n\n${completeOrderInfo}\n\nGive me a complete summary of this order and verify that it is correct.${notesWarning}`;
 						await generateAIChatResponse();
 					} else if ((selectedStatus === 'processing' || selectedStatus === 'confirmed') && oldStatus !== selectedStatus) {
-						// Status changed - request updated summary
+						// Status changed - request updated summary with complete order info
 						const messagesList = convertHistoryToMessages(history);
+						const completeOrderInfo = getCompleteOrderInfo(order);
+						const notesWarning = order.notes 
+							? ($i18n 
+								? `\n\n⚠️ ATTENTION: Cette commande contient des notes importantes. Assure-toi de les lire attentivement et de mettre en évidence toute erreur, correction ou demande spéciale mentionnée dans les notes.`
+								: `\n\n⚠️ ATTENTION: This order contains important notes. Make sure to read them carefully and highlight any errors, corrections, or special requests mentioned in the notes.`)
+							: '';
 						if (messagesList.length === 0 || (messagesList.length === 1 && messagesList[0].role === 'assistant' && !messagesList[0].done)) {
 							currentMessage = $i18n 
-								? `La commande vient de passer au statut "${getStatusLabel(selectedStatus)}". Fais-moi un résumé complet de cette commande et vérifie qu'elle est correcte.`
-								: `The order has just been updated to "${getStatusLabel(selectedStatus)}" status. Give me a complete summary of this order and verify that it is correct.`;
+								? `La commande vient de passer au statut "${getStatusLabel(selectedStatus)}". Voici toutes les informations actuelles de la commande:\n\n${completeOrderInfo}\n\nFais-moi un résumé complet de cette commande et vérifie qu'elle est correcte.${notesWarning}`
+								: `The order has just been updated to "${getStatusLabel(selectedStatus)}" status. Here is all the current order information:\n\n${completeOrderInfo}\n\nGive me a complete summary of this order and verify that it is correct.${notesWarning}`;
 							await generateAIChatResponse();
 						} else {
 							currentMessage = $i18n
-								? `La commande vient de passer au statut "${getStatusLabel(selectedStatus)}". Peux-tu me donner un résumé de l'état actuel de la commande ?`
-								: `The order has just been updated to "${getStatusLabel(selectedStatus)}" status. Can you give me a summary of the current order status?`;
+								? `La commande vient de passer au statut "${getStatusLabel(selectedStatus)}". Voici toutes les informations actuelles de la commande:\n\n${completeOrderInfo}\n\nPeux-tu me donner un résumé de l'état actuel de la commande ?${notesWarning}`
+								: `The order has just been updated to "${getStatusLabel(selectedStatus)}" status. Here is all the current order information:\n\n${completeOrderInfo}\n\nCan you give me a summary of the current order status?${notesWarning}`;
 							await generateAIChatResponse();
 						}
 					}
@@ -322,13 +342,54 @@
 	};
 
 
+	// Helper function to generate complete order information string
+	const getCompleteOrderInfo = (order) => {
+		const itemsSummary = order.items.map(item => 
+			`- ${item.name} x${item.quantity} (${item.price} ${item.currency} each) - Total: ${item.price * item.quantity} ${item.currency}`
+		).join('\n');
+		
+		const shippingAddressStr = [
+			order.shipping_address.street,
+			`${order.shipping_address.postal_code} ${order.shipping_address.city}`,
+			order.shipping_address.state,
+			order.shipping_address.country
+		].filter(Boolean).join(', ');
+
+		return `Order ID: ${order.id}
+Status: ${order.status}
+Customer Name: ${order.customer_name}
+Customer Email: ${order.customer_email}
+${order.customer_phone ? `Customer Phone: ${order.customer_phone}` : ''}
+
+ITEMS ORDERED:
+${itemsSummary}
+
+SHIPPING ADDRESS:
+${shippingAddressStr}
+
+FINANCIAL DETAILS:
+- Subtotal: ${order.subtotal} ${order.currency}
+- Shipping Cost: ${order.shipping_cost} ${order.currency}
+- Total: ${order.total} ${order.currency}
+
+${order.tracking_number ? `TRACKING NUMBER: ${order.tracking_number}` : ''}
+${order.carrier ? `CARRIER: ${order.carrier}` : ''}
+${order.tracking_url ? `TRACKING URL: ${order.tracking_url}` : ''}
+${order.assigned_user_id ? `ASSIGNED USER ID: ${order.assigned_user_id}` : ''}
+${order.assigned_delivery_person_id ? `ASSIGNED DELIVERY PERSON ID: ${order.assigned_delivery_person_id}` : ''}
+${order.notes ? `⚠️ NOTES (IMPORTANT - READ CAREFULLY): ${order.notes}` : ''}
+${order.created_at ? `CREATED AT: ${formatDate(order.created_at)}` : ''}
+${order.updated_at ? `UPDATED AT: ${formatDate(order.updated_at)}` : ''}
+${order.shipped_at ? `SHIPPED AT: ${formatDate(order.shipped_at)}` : ''}
+${order.delivered_at ? `DELIVERED AT: ${formatDate(order.delivered_at)}` : ''}
+${order.estimated_delivery_date ? `ESTIMATED DELIVERY: ${formatDate(order.estimated_delivery_date)}` : ''}`;
+	};
+
 	const initializeAIChat = async () => {
 		if (!order) return;
 
-		// Get default model
-		if (!selectedModelId) {
-			selectedModelId = $settings?.default_model || ($models.length > 0 ? $models[0].id : '');
-		}
+		// Always use default model for automatic summaries
+		selectedModelId = $settings?.default_model || ($models.length > 0 ? $models[0].id : '');
 		if (!selectedModelId) {
 			toast.error($i18n ? $i18n.t('No model available') : 'No model available');
 			return;
@@ -342,14 +403,32 @@
 			// Load existing messages
 			await tick();
 		} else {
-			// No messages exist, generate initial summary with order context
-			// Add order info directly in the user message to ensure AI sees it
-			const orderContext = `Order ID: ${order.id}\nStatus: ${order.status}\nCustomer: ${order.customer_name} (${order.customer_email})\nItems: ${order.items.map(i => `${i.name} x${i.quantity}`).join(', ')}\nTotal: ${order.total} ${order.currency}`;
+			// No messages exist, generate initial summary with complete order context
+			const completeOrderInfo = getCompleteOrderInfo(order);
+			const notesWarning = order.notes 
+				? ($i18n 
+					? `\n\n⚠️ ATTENTION: Cette commande contient des notes importantes. Assure-toi de les lire attentivement et de mettre en évidence toute erreur, correction ou demande spéciale mentionnée dans les notes.`
+					: `\n\n⚠️ ATTENTION: This order contains important notes. Make sure to read them carefully and highlight any errors, corrections, or special requests mentioned in the notes.`)
+				: '';
 			currentMessage = $i18n 
-				? `Voici les informations de la commande que j'ai dans mon système:\n\n${orderContext}\n\nFais-moi un résumé de cette commande et vérifie qu'elle est correcte.`
-				: `Here is the order information I have in my system:\n\n${orderContext}\n\nGive me a summary of this order and verify that it is correct.`;
+				? `Voici les informations de la commande que j'ai dans mon système:\n\n${completeOrderInfo}\n\nFais-moi un résumé complet de cette commande et vérifie qu'elle est correcte.${notesWarning}`
+				: `Here is the complete order information I have in my system:\n\n${completeOrderInfo}\n\nGive me a complete summary of this order and verify that it is correct.${notesWarning}`;
 			await generateAIChatResponse();
 		}
+	};
+
+	let scrollTimeout = null;
+	const scrollToBottom = () => {
+		// Debounce scroll to avoid too many calls during streaming
+		if (scrollTimeout) {
+			clearTimeout(scrollTimeout);
+		}
+		scrollTimeout = setTimeout(() => {
+			const element = document.getElementById('messages-container');
+			if (element) {
+				element.scrollTop = element.scrollHeight;
+			}
+		}, 50);
 	};
 
 	const saveChatMessages = async () => {
@@ -375,8 +454,10 @@
 	const generateAIChatResponse = async () => {
 		if (!order) return;
 		
+		// Use default model if not explicitly selected
 		if (!selectedModelId) {
 			selectedModelId = $settings?.default_model || ($models.length > 0 ? $models[0].id : '');
+			selectedModels = selectedModelId ? [selectedModelId] : [];
 		}
 
 		const model = $models.find((m) => m.id === selectedModelId);
@@ -410,6 +491,12 @@
 			currentMessage = '';
 			await tick();
 			
+			// Scroll to show the new message immediately
+			const element = document.getElementById('messages-container');
+			if (element) {
+				element.scrollTop = element.scrollHeight;
+			}
+			
 			// Save messages after user sends a message
 			await saveChatMessages();
 		}
@@ -438,13 +525,19 @@
 		history.currentId = responseMessageId;
 		history = history;
 		await tick();
+		
+		// Scroll to show the new message immediately
+		const element = document.getElementById('messages-container');
+		if (element) {
+			element.scrollTop = element.scrollHeight;
+		}
 
 		generatingResponse = true;
 		stopGeneration = false;
 
-		// Build order information for the prompt
+		// Build complete order information using helper function
 		const itemsSummary = order.items.map(item => 
-			`- ${item.name} x${item.quantity} (${item.price} ${item.currency} each)`
+			`- ${item.name} x${item.quantity} (${item.price} ${item.currency} each) - Total: ${item.price * item.quantity} ${item.currency}`
 		).join('\n');
 		
 		const shippingAddressStr = [
@@ -460,8 +553,8 @@
 			($user?.role === 'admin' || ($user?.permissions?.features?.web_search ?? true)) &&
 			modelSupportsWebSearch;
 		
-		// Build complete order information first
-		const orderInfo = `=== ORDER INFORMATION (YOU HAVE ACCESS TO THIS) ===
+		// Build complete order information with all details
+		const orderInfo = `=== COMPLETE ORDER INFORMATION (YOU HAVE ACCESS TO ALL OF THIS) ===
 Order ID: ${order.id}
 Status: ${order.status}
 Customer Name: ${order.customer_name}
@@ -479,13 +572,17 @@ FINANCIAL DETAILS:
 - Shipping Cost: ${order.shipping_cost} ${order.currency}
 - Total: ${order.total} ${order.currency}
 
-${order.tracking_number ? `TRACKING: ${order.tracking_number}` : ''}
+${order.tracking_number ? `TRACKING NUMBER: ${order.tracking_number}` : ''}
 ${order.carrier ? `CARRIER: ${order.carrier}` : ''}
-${order.assigned_user_id ? `ASSIGNED USER: ${order.assigned_user_id}` : ''}
-${order.notes ? `NOTES: ${order.notes}` : ''}
-${order.shipped_at ? `SHIPPED AT: ${new Date(order.shipped_at / 1000000).toLocaleString('fr-FR')}` : ''}
-${order.delivered_at ? `DELIVERED AT: ${new Date(order.delivered_at / 1000000).toLocaleString('fr-FR')}` : ''}
-${order.estimated_delivery_date ? `ESTIMATED DELIVERY: ${new Date(order.estimated_delivery_date / 1000000).toLocaleString('fr-FR')}` : ''}
+${order.tracking_url ? `TRACKING URL: ${order.tracking_url}` : ''}
+${order.assigned_user_id ? `ASSIGNED USER ID: ${order.assigned_user_id}` : ''}
+${order.assigned_delivery_person_id ? `ASSIGNED DELIVERY PERSON ID: ${order.assigned_delivery_person_id}` : ''}
+${order.notes ? `⚠️ NOTES (IMPORTANT - READ CAREFULLY): ${order.notes}` : ''}
+${order.created_at ? `CREATED AT: ${formatDate(order.created_at)}` : ''}
+${order.updated_at ? `UPDATED AT: ${formatDate(order.updated_at)}` : ''}
+${order.shipped_at ? `SHIPPED AT: ${formatDate(order.shipped_at)}` : ''}
+${order.delivered_at ? `DELIVERED AT: ${formatDate(order.delivered_at)}` : ''}
+${order.estimated_delivery_date ? `ESTIMATED DELIVERY: ${formatDate(order.estimated_delivery_date)}` : ''}
 === END OF ORDER INFORMATION ===`;
 
 		const systemPrompt = `You are a helpful assistant with access to order data. You can see the complete order information below. Use this information to answer questions.
@@ -502,6 +599,9 @@ CRITICAL INSTRUCTIONS:
 5. Do NOT ask for information - you already have it in the data above
 6. Be helpful and provide complete information from the order data above
 7. If the user mentions "${order.items[0]?.name || 'a product'}" or any item, you can see it in the order data above
+8. **PAY SPECIAL ATTENTION TO NOTES** - If there are notes in the order, they may contain important information like errors, corrections, special requests, or customer concerns. Always highlight these prominently in your summary.
+9. **DETECT ERRORS AND ISSUES** - If notes mention errors (like wrong quantities, wrong items, mistakes), highlight them clearly and suggest what action should be taken.
+10. **PRIORITIZE IMPORTANT INFORMATION** - Put critical information (errors, corrections, urgent requests) at the top or in a clearly marked section.
 
 EXAMPLE RESPONSE when asked about the order:
 "Based on the order information I have access to:
@@ -518,15 +618,22 @@ ${order.notes ? `- **Notes:** ${order.notes}` : ''}
 
 [Add any observations or recommendations]"
 
+${order.notes ? `⚠️ IMPORTANT: This order has notes that may contain important information, errors, or special requests. Always read and highlight the notes prominently in your response. If the notes mention any errors or corrections needed, make sure to:
+- Clearly state what the error or issue is
+- Explain what needs to be corrected
+- Suggest the appropriate action to take
+- Put this information in a prominent position in your summary` : ''}
+
 IMPORTANT: The order data above contains all the information. When the user asks about "${order.items[0]?.name || 'products'}" or the order, use the data above. You have this information - do not ask for it.
 
 You can:
 - Summarize the order using the data above
 - Answer questions about items, customer, shipping, totals
 - Provide recommendations based on the order data
+- Highlight errors, corrections, or special requests mentioned in notes
 ${webSearchEnabled ? '- Search for additional shipping information if needed' : ''}
 
-Remember: You have access to the order data above. Use it to help.`;
+Remember: Always check and highlight the notes if they exist, especially if they mention errors or corrections needed.`;
 
 		// Build chat messages with system prompt and conversation history
 		const messagesList = convertHistoryToMessages(history);
@@ -572,8 +679,10 @@ Remember: You have access to the order data above. Use it to help.`;
 						if (stopGeneration) {
 							controller.abort('User: Stop Response');
 						}
-						responseMessage.done = true;
-						messages = messages;
+						if (history.messages[responseMessageId]) {
+							history.messages[responseMessageId].done = true;
+							history = history;
+						}
 						generatingResponse = false;
 						break;
 					}
@@ -584,31 +693,46 @@ Remember: You have access to the order data above. Use it to help.`;
 						for (const line of lines) {
 							if (line !== '') {
 								if (line === 'data: [DONE]') {
-									history.messages[responseMessageId].done = true;
-									history = history;
+									if (history.messages[responseMessageId]) {
+										history.messages[responseMessageId].done = true;
+										history = history;
+									}
 									generatingResponse = false;
 									
 									// Save messages after AI response is complete
 									await saveChatMessages();
+									
+									// Scroll to bottom immediately when done
+									await tick();
+									const element = document.getElementById('messages-container');
+									if (element) {
+										element.scrollTop = element.scrollHeight;
+									}
 								} else if (line.startsWith('data: ')) {
 									let data = JSON.parse(line.replace(/^data: /, ''));
 
 									if (data.choices && data.choices.length > 0) {
 										const choice = data.choices[0];
 										if (choice.delta && choice.delta.content) {
-											history.messages[responseMessageId].content += choice.delta.content;
-											history = history;
+											if (history.messages[responseMessageId]) {
+												history.messages[responseMessageId].content += choice.delta.content;
+												history = history;
+												
+												// Scroll to bottom during streaming (debounced)
+												scrollToBottom();
+											}
 										}
 									}
 								}
 							}
 						}
 					} catch (error) {
-						// Error handled silently
+						console.error('Error parsing stream:', error);
 					}
 				}
 			}
 		} catch (error) {
+			console.error('Error generating response:', error);
 			toast.error($i18n ? $i18n.t('Failed to generate response') : 'Failed to generate response');
 			// Remove the failed assistant message
 			if (history.messages[responseMessageId]) {
@@ -648,30 +772,46 @@ Remember: You have access to the order data above. Use it to help.`;
 			((newStatus === 'processing' || newStatus === 'confirmed') && oldStatus !== newStatus); // Status changed
 		
 		if (shouldAutoRespond) {
+			// Use default model for automatic summaries
+			selectedModelId = $settings?.default_model || ($models.length > 0 ? $models[0].id : '');
+			selectedModels = selectedModelId ? [selectedModelId] : [];
+			
 			// Open AI assistant if not already open
 			if (!showAIAssistant) {
 				await initializeAIChat();
 			}
 			
-			// Generate automatic response
+			// Generate automatic response with complete order info
 			if (newStatus === 'pending' && Object.keys(history.messages).length === 0) {
-				// New order - request initial summary
+				// New order - request initial summary with complete order info
+				const completeOrderInfo = getCompleteOrderInfo(order);
+				const notesWarning = order.notes 
+					? ($i18n 
+						? `\n\n⚠️ ATTENTION: Cette commande contient des notes importantes. Assure-toi de les lire attentivement et de mettre en évidence toute erreur, correction ou demande spéciale mentionnée dans les notes.`
+						: `\n\n⚠️ ATTENTION: This order contains important notes. Make sure to read them carefully and highlight any errors, corrections, or special requests mentioned in the notes.`)
+					: '';
 				currentMessage = $i18n 
-					? `Une nouvelle commande vient d'être soumise par le client. Fais-moi un résumé complet de cette commande et vérifie qu'elle est correcte.`
-					: `A new order has just been submitted by the client. Give me a complete summary of this order and verify that it is correct.`;
+					? `Une nouvelle commande vient d'être soumise par le client. Voici toutes les informations de la commande:\n\n${completeOrderInfo}\n\nFais-moi un résumé complet de cette commande et vérifie qu'elle est correcte.${notesWarning}`
+					: `A new order has just been submitted by the client. Here is all the order information:\n\n${completeOrderInfo}\n\nGive me a complete summary of this order and verify that it is correct.${notesWarning}`;
 				await generateAIChatResponse();
 			} else if ((newStatus === 'processing' || newStatus === 'confirmed') && oldStatus !== newStatus) {
-				// Status changed - request updated summary
+				// Status changed - request updated summary with complete order info
 				const messagesList = convertHistoryToMessages(history);
+				const completeOrderInfo = getCompleteOrderInfo(order);
+				const notesWarning = order.notes 
+					? ($i18n 
+						? `\n\n⚠️ ATTENTION: Cette commande contient des notes importantes. Assure-toi de les lire attentivement et de mettre en évidence toute erreur, correction ou demande spéciale mentionnée dans les notes.`
+						: `\n\n⚠️ ATTENTION: This order contains important notes. Make sure to read them carefully and highlight any errors, corrections, or special requests mentioned in the notes.`)
+					: '';
 				if (messagesList.length === 0 || (messagesList.length === 1 && messagesList[0].role === 'assistant' && !messagesList[0].done)) {
 					currentMessage = $i18n 
-						? `La commande vient de passer au statut "${getStatusLabel(newStatus)}". Fais-moi un résumé complet de cette commande et vérifie qu'elle est correcte.`
-						: `The order has just been updated to "${getStatusLabel(newStatus)}" status. Give me a complete summary of this order and verify that it is correct.`;
+						? `La commande vient de passer au statut "${getStatusLabel(newStatus)}". Voici toutes les informations actuelles de la commande:\n\n${completeOrderInfo}\n\nFais-moi un résumé complet de cette commande et vérifie qu'elle est correcte.${notesWarning}`
+						: `The order has just been updated to "${getStatusLabel(newStatus)}" status. Here is all the current order information:\n\n${completeOrderInfo}\n\nGive me a complete summary of this order and verify that it is correct.${notesWarning}`;
 					await generateAIChatResponse();
 				} else {
 					currentMessage = $i18n
-						? `La commande vient de passer au statut "${getStatusLabel(newStatus)}". Peux-tu me donner un résumé de l'état actuel de la commande ?`
-						: `The order has just been updated to "${getStatusLabel(newStatus)}" status. Can you give me a summary of the current order status?`;
+						? `La commande vient de passer au statut "${getStatusLabel(newStatus)}". Voici toutes les informations actuelles de la commande:\n\n${completeOrderInfo}\n\nPeux-tu me donner un résumé de l'état actuel de la commande ?${notesWarning}`
+						: `The order has just been updated to "${getStatusLabel(newStatus)}" status. Here is all the current order information:\n\n${completeOrderInfo}\n\nCan you give me a summary of the current order status?${notesWarning}`;
 					await generateAIChatResponse();
 				}
 			}
